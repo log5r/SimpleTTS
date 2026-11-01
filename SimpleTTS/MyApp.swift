@@ -9,11 +9,14 @@ import SwiftUI
         // 状態を 1 つのモデルで持つため、複数ウィンドウを作らない Window にしている
         Window("SimpleTTS", id: "main") {
             ContentView(model: model)
-                .frame(minWidth: 820, minHeight: 560)
+                .frame(minWidth: LayoutMetrics.windowMinWidth, minHeight: LayoutMetrics.windowMinHeight)
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
                     model.prepareForTermination()
                 }
         }
+        // コンテンツの最小サイズ未満にウィンドウを縮められないようにする
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: LayoutMetrics.windowDefaultWidth, height: LayoutMetrics.windowDefaultHeight)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("開く…") {

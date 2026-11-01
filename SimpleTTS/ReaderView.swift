@@ -1,35 +1,61 @@
 import SwiftUI
 
+/// 読み上げ画面の幅に応じたレイアウトの段階。
+/// 幅が足りないときは、補助的なボタンのラベルを省略してアイコン（＋ツールチップ）だけにする。
+enum ReaderWidthClass: Equatable {
+    /// すべてのボタンにラベルを表示する
+    case regular
+    /// 「セーブ」「コピー」と状態表示をアイコンだけにする
+    case compact
+    /// 「再生／一時停止」以外のボタンをアイコンだけにする
+    case minimal
+
+    /// 幅の下限は `LayoutMetrics.readerMinWidth` でウィンドウ側から制限している。
+    /// 操作列の実寸（左右の余白込み）はおよそ regular: 650pt、compact: 440pt、minimal: 320pt。
+    init(width: CGFloat) {
+        switch width {
+        case 680...: self = .regular
+        case 520...: self = .compact
+        default: self = .minimal
+        }
+    }
+}
+
 /// 読み上げ中の文を大写しにし、その前後の文を上下に表示する。
 struct ReaderView: View {
     let model: ReaderModel
 
     var body: some View {
         if let document = model.document {
-            VStack(spacing: 0) {
-                header(for: document)
-                Divider()
-                VStack(spacing: 20) {
-                    ContextColumn(
-                        sentences: model.previousContext,
-                        currentIndex: model.currentIndex,
-                        alignment: .bottom,
-                        onSelect: { model.jump(to: $0) }
-                    )
-                    currentSentence
-                        .layoutPriority(1)
-                    ContextColumn(
-                        sentences: model.nextContext,
-                        currentIndex: model.currentIndex,
-                        alignment: .top,
-                        onSelect: { model.jump(to: $0) }
-                    )
+            // 文の長さに関係なく、詳細カラムに割り当てられたサイズでレイアウトする。
+            GeometryReader { geometry in
+                let widthClass = ReaderWidthClass(width: geometry.size.width)
+                VStack(spacing: 0) {
+                    header(for: document, widthClass: widthClass)
+                    Divider()
+                    VStack(spacing: widthClass == .regular ? 20 : 14) {
+                        ContextColumn(
+                            sentences: model.previousContext,
+                            currentIndex: model.currentIndex,
+                            alignment: .bottom,
+                            onSelect: { model.jump(to: $0) }
+                        )
+                        currentSentence(widthClass: widthClass)
+                            .layoutPriority(1)
+                        ContextColumn(
+                            sentences: model.nextContext,
+                            currentIndex: model.currentIndex,
+                            alignment: .top,
+                            onSelect: { model.jump(to: $0) }
+                        )
+                    }
+                    .padding(.horizontal, widthClass == .regular ? 32 : 16)
+                    .padding(.vertical, widthClass == .regular ? 20 : 14)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    Divider()
+                    ControlBar(model: model, widthClass: widthClass)
                 }
-                .padding(.horizontal, 32)
-                .padding(.vertical, 20)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                Divider()
-                ControlBar(model: model)
+                .frame(width: geometry.size.width, height: geometry.size.height)
             }
         } else {
             ContentUnavailableView {
@@ -44,25 +70,32 @@ struct ReaderView: View {
         }
     }
 
-    private func header(for document: ReaderDocument) -> some View {
+    private func header(for document: ReaderDocument, widthClass: ReaderWidthClass) -> some View {
         VStack(spacing: 6) {
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "doc.text")
                 Text(document.title)
                     .font(.headline)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Spacer()
-                if model.isPlaying {
-                    Label("読み上げ中", systemImage: "speaker.wave.2.fill")
-                        .foregroundStyle(.tint)
-                } else {
-                    Label("一時停止中", systemImage: "pause.circle")
-                        .foregroundStyle(.secondary)
+                    .layoutPriority(-1)
+                Spacer(minLength: 8)
+                Group {
+                    if model.isPlaying {
+                        Label("読み上げ中", systemImage: "speaker.wave.2.fill")
+                            .foregroundStyle(.tint)
+                    } else {
+                        Label("一時停止中", systemImage: "pause.circle")
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                .labelStyle(AdaptiveLabelStyle(iconOnly: widthClass != .regular))
+                .help(model.isPlaying ? "読み上げ中" : "一時停止中")
+                .fixedSize()
                 Text("\(model.currentIndex + 1) / \(model.sentenceCount)")
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
+                    .fixedSize()
             }
             ProgressView(value: Double(model.currentIndex + 1), total: Double(max(model.sentenceCount, 1)))
         }
@@ -70,17 +103,17 @@ struct ReaderView: View {
         .padding(.vertical, 10)
     }
 
-    private var currentSentence: some View {
+    private func currentSentence(widthClass: ReaderWidthClass) -> some View {
         Group {
             if model.isPlaying {
-                currentSentenceText
+                currentSentenceText(widthClass: widthClass)
             } else {
                 // 一時停止中は大写しの文を選択してコピーできる
-                currentSentenceText
+                currentSentenceText(widthClass: widthClass)
                     .textSelection(.enabled)
             }
         }
-        .padding(24)
+        .padding(widthClass == .regular ? 24 : 16)
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 16)
@@ -92,12 +125,28 @@ struct ReaderView: View {
         )
     }
 
-    private var currentSentenceText: some View {
+    private func currentSentenceText(widthClass: ReaderWidthClass) -> some View {
         Text(model.currentSentence ?? "")
-            .font(.system(size: 34, weight: .semibold))
+            .font(.system(size: widthClass == .regular ? 34 : 28, weight: .semibold))
             .multilineTextAlignment(.center)
             .minimumScaleFactor(0.4)
-            .frame(maxWidth: .infinity, minHeight: 80, maxHeight: 360)
+            .frame(maxWidth: .infinity, minHeight: 80)
+    }
+}
+
+/// 幅に応じて「アイコン＋タイトル」と「アイコンのみ」を切り替えるラベルスタイル。
+/// アイコンのみのときもタイトルはアクセシビリティラベルとして残る。
+private struct AdaptiveLabelStyle: LabelStyle {
+    let iconOnly: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        if iconOnly {
+            Label(configuration)
+                .labelStyle(.iconOnly)
+        } else {
+            Label(configuration)
+                .labelStyle(.titleAndIcon)
+        }
     }
 }
 
@@ -124,7 +173,8 @@ private struct ContextColumn: View {
                     .help("クリックでこの文へ移動")
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
+        // 高さが足りないときは文脈を縮め、見出しと操作列の領域を確保する。
+        .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: alignment)
         .clipped()
     }
 
@@ -137,60 +187,72 @@ private struct ContextColumn: View {
 /// 再生／一時停止・前後移動・セーブ・コピーの操作列
 private struct ControlBar: View {
     let model: ReaderModel
+    let widthClass: ReaderWidthClass
 
     var body: some View {
         VStack(spacing: 8) {
-            HStack(spacing: 12) {
-                Button {
-                    model.step(by: -1)
-                } label: {
-                    Label("前の文", systemImage: "backward.end.fill")
-                }
-                .disabled(!model.canStepBackward)
-                .keyboardShortcut(.leftArrow, modifiers: [.command])
+            HStack(spacing: widthClass == .regular ? 12 : 8) {
+                Group {
+                    Button {
+                        model.step(by: -1)
+                    } label: {
+                        Label("前の文", systemImage: "backward.end.fill")
+                    }
+                    .disabled(!model.canStepBackward)
+                    .keyboardShortcut(.leftArrow, modifiers: [.command])
+                    .help("前の文へ移動（⌘←）")
 
-                Button {
-                    model.togglePlayback()
-                } label: {
-                    Label(
-                        model.isPlaying ? "一時停止" : "再生",
-                        systemImage: model.isPlaying ? "pause.fill" : "play.fill"
-                    )
-                    .frame(minWidth: 90)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .keyboardShortcut(.space, modifiers: [])
+                    Button {
+                        model.togglePlayback()
+                    } label: {
+                        Label(
+                            model.isPlaying ? "一時停止" : "再生",
+                            systemImage: model.isPlaying ? "pause.fill" : "play.fill"
+                        )
+                        .labelStyle(.titleAndIcon)
+                        .frame(minWidth: 90)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .keyboardShortcut(.space, modifiers: [])
+                    .help(model.isPlaying ? "一時停止（スペース）" : "再生（スペース）")
 
-                Button {
-                    model.step(by: 1)
-                } label: {
-                    Label("次の文", systemImage: "forward.end.fill")
+                    Button {
+                        model.step(by: 1)
+                    } label: {
+                        Label("次の文", systemImage: "forward.end.fill")
+                    }
+                    .disabled(!model.canStepForward)
+                    .keyboardShortcut(.rightArrow, modifiers: [.command])
+                    .help("次の文へ移動（⌘→）")
                 }
-                .disabled(!model.canStepForward)
-                .keyboardShortcut(.rightArrow, modifiers: [.command])
+                .labelStyle(AdaptiveLabelStyle(iconOnly: widthClass == .minimal))
 
                 Divider()
                     .frame(height: 22)
 
-                Button {
-                    model.saveManually()
-                } label: {
-                    Label("この位置をセーブ", systemImage: "bookmark")
-                }
-                .disabled(!model.canSaveManually)
-                .keyboardShortcut("s", modifiers: [.command])
-                .help("一時停止中に、現在の位置をセーブします（最大\(ReaderModel.manualSaveLimit)件）")
+                Group {
+                    Button {
+                        model.saveManually()
+                    } label: {
+                        Label("この位置をセーブ", systemImage: "bookmark")
+                    }
+                    .disabled(!model.canSaveManually)
+                    .keyboardShortcut("s", modifiers: [.command])
+                    .help("一時停止中に、現在の位置をセーブします（⌘S、最大\(ReaderModel.manualSaveLimit)件）")
 
-                Button {
-                    model.copyCurrentSentence()
-                } label: {
-                    Label("文章をコピー", systemImage: "doc.on.doc")
+                    Button {
+                        model.copyCurrentSentence()
+                    } label: {
+                        Label("文章をコピー", systemImage: "doc.on.doc")
+                    }
+                    .disabled(!model.canCopy)
+                    .keyboardShortcut("c", modifiers: [.command, .shift])
+                    .help("一時停止中に、大写しの文章をコピーします（⇧⌘C）")
                 }
-                .disabled(!model.canCopy)
-                .keyboardShortcut("c", modifiers: [.command, .shift])
-                .help("一時停止中に、大写しの文章をコピーします")
+                .labelStyle(AdaptiveLabelStyle(iconOnly: widthClass != .regular))
             }
+            .fixedSize()
 
             Text(model.statusMessage ?? " ")
                 .font(.callout)
@@ -198,6 +260,7 @@ private struct ControlBar: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal)
         .padding(.vertical, 12)
     }
