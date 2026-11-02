@@ -1,0 +1,305 @@
+import AVFoundation
+import Foundation
+
+/// 文ごとに `say -o` でファイルへ合成し、1 本の `AVAudioEngine` で連続再生する。
+///
+/// - 合成は再生とは別に背景で行い、次の文を先読み（`prefetch`）して文間の待ち時間を短くする。
+/// - 読み上げ中はエンジンを止めず、文と文の間も無音を流し続ける。出力デバイスの IO が文ごとに
+///   止まったり起きたりしないので、デバイス側の立ち上がりで文頭が欠けることもない。
+/// - 停止・移動は短いフェードアウトのあとに止める（`say` を SIGTERM で切るとクリックになる）。
+///
+/// `onFinish` は「その文を最後まで再生した」か「合成・再生に失敗した」ときだけ呼ばれる。
+/// `stop()` や次の `speak` で中断した文については呼ばれない。
+final class SpeechPlayer {
+    /// エンジン起動直後、最初の文の前に流す無音。出力デバイスが起き上がる時間を確保する。
+    static let leadInDuration: TimeInterval = 0.3
+    /// 前の文を最後まで読んだあと、次の文の前に置く間。`say -o` の波形には文末の間がほとんど含まれない。
+    static let sentenceGapDuration: TimeInterval = 0.35
+    /// 停止・移動で前の文を中断したあと、次の文の前に置く間
+    static let interruptedGapDuration: TimeInterval = 0.1
+    /// 停止時のフェードアウトの長さと段数
+    static let fadeOutDuration: TimeInterval = 0.032
+    static let fadeOutSteps = 4
+
+    private let engine = AVAudioEngine()
+    private let player = AVAudioPlayerNode()
+    private let format = AVAudioFormat(standardFormatWithSampleRate: SpeechSynthesizer.sampleRate, channels: 1)!
+    private var isPlayerAttached = false
+
+    /// 合成済み（または合成中）のファイル。現在の文と先読みした次の文だけを保持する。
+    private var synthesisTasks: [SpeechRequest: Task<URL, Error>] = [:]
+    private let cacheDirectory: URL
+
+    /// 再生中（合成待ちを含む）の文
+    private var current: Utterance?
+    /// `speak`・`stop` のたびに進める世代番号。古い完了通知を捨てるために使う。
+    private var generation = 0
+    /// 進行中のフェードアウト。次の文はこれが終わってから流す。
+    private var fadeOut: Task<Void, Never>?
+    /// 次の文の前に置く無音の長さ
+    private var pendingGap: TimeInterval = SpeechPlayer.leadInDuration
+    private var configurationObserver: NSObjectProtocol?
+
+    private struct Utterance {
+        let token: Int
+        let request: SpeechRequest
+        var fileURL: URL?
+        let onFinish: (Result<Void, Error>) -> Void
+    }
+
+    init() {
+        // 終了済みの say の stdin に書き込んでもアプリが落ちないようにする
+        signal(SIGPIPE, SIG_IGN)
+
+        let base = FileManager.default.temporaryDirectory
+        cacheDirectory = base.appending(
+            path: "Speech-\(ProcessInfo.processInfo.processIdentifier)", directoryHint: .isDirectory)
+        Self.removeStaleCacheDirectories(in: base, keeping: cacheDirectory)
+        try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+
+        configurationObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.engineConfigurationDidChange()
+            }
+        }
+    }
+
+    deinit {
+        if let configurationObserver {
+            NotificationCenter.default.removeObserver(configurationObserver)
+        }
+    }
+
+    // MARK: - Public
+
+    /// `text` を読み上げる。再生中の文があれば中断する。
+    func speak(
+        _ text: String,
+        voice: String?,
+        rate: Int,
+        onFinish: @escaping (Result<Void, Error>) -> Void
+    ) {
+        interruptCurrent()
+        generation &+= 1
+        let token = generation
+        let request = SpeechRequest(text: text, voice: voice, rate: rate)
+        current = Utterance(token: token, request: request, fileURL: nil, onFinish: onFinish)
+
+        let synthesis = synthesisTask(for: request)
+        discardSynthesisTasks(except: [request])
+
+        Task { [weak self] in
+            let result: Result<URL, Error>
+            do {
+                result = .success(try await synthesis.value)
+            } catch {
+                result = .failure(error)
+            }
+            guard let self, self.generation == token else { return }
+            // 前の文のフェードアウトが終わるのを待ってから流す
+            if let fadeOut = self.fadeOut {
+                await fadeOut.value
+            }
+            guard self.generation == token, var utterance = self.current, utterance.token == token else { return }
+            switch result {
+            case let .success(url):
+                utterance.fileURL = url
+                self.current = utterance
+                self.play(utterance)
+            case let .failure(error):
+                self.current = nil
+                self.stopEngineIfIdle()
+                utterance.onFinish(.failure(error))
+            }
+        }
+    }
+
+    /// 次に読む見込みの文を先に合成しておく。
+    func prefetch(_ text: String, voice: String?, rate: Int) {
+        let request = SpeechRequest(text: text, voice: voice, rate: rate)
+        _ = synthesisTask(for: request)
+        var keep: Set<SpeechRequest> = [request]
+        if let current {
+            keep.insert(current.request)
+        }
+        discardSynthesisTasks(except: keep)
+    }
+
+    /// 再生を止める。合成済みのファイルは再開に備えて残す。
+    func stop() {
+        interruptCurrent()
+        generation &+= 1
+        let token = generation
+        if let fadeOut {
+            Task { [weak self] in
+                await fadeOut.value
+                guard let self, self.generation == token else { return }
+                self.stopEngineIfIdle()
+            }
+        } else {
+            stopEngineIfIdle()
+        }
+    }
+
+    /// アプリ終了時に、合成ファイルの一時ディレクトリを削除する。
+    func removeTemporaryFiles() {
+        discardSynthesisTasks(except: [])
+        try? FileManager.default.removeItem(at: cacheDirectory)
+    }
+
+    // MARK: - Synthesis cache
+
+    private func synthesisTask(for request: SpeechRequest) -> Task<URL, Error> {
+        if let existing = synthesisTasks[request] {
+            return existing
+        }
+        let url = cacheDirectory.appending(path: "\(UUID().uuidString).wav", directoryHint: .notDirectory)
+        let task = Task.detached(priority: .userInitiated) {
+            try await SpeechSynthesizer.synthesize(request, to: url)
+            return url
+        }
+        synthesisTasks[request] = task
+        return task
+    }
+
+    /// `keep` 以外の合成をキャンセルし、ファイルを削除する。
+    private func discardSynthesisTasks(except keep: Set<SpeechRequest>) {
+        for (request, task) in synthesisTasks where !keep.contains(request) {
+            synthesisTasks.removeValue(forKey: request)
+            task.cancel()
+            Task.detached(priority: .utility) {
+                // 合成済みなら URL が返るので削除する。キャンセル・失敗時は synthesize 側が削除している。
+                if let url = try? await task.value {
+                    try? FileManager.default.removeItem(at: url)
+                }
+            }
+        }
+    }
+
+    // MARK: - Playback
+
+    private func play(_ utterance: Utterance) {
+        guard let fileURL = utterance.fileURL else { return }
+        let file: AVAudioFile
+        do {
+            file = try AVAudioFile(forReading: fileURL)
+            try startEngineIfNeeded(for: file.processingFormat)
+            if !player.isPlaying {
+                try player.playAudio()
+            }
+        } catch {
+            current = nil
+            stopEngineIfIdle()
+            utterance.onFinish(.failure(error))
+            return
+        }
+
+        let token = utterance.token
+        scheduleSilence(duration: pendingGap)
+        pendingGap = Self.sentenceGapDuration
+        if file.length > 0 {
+            player.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.utteranceDidPlayBack(token: token)
+                }
+            }
+        } else {
+            // 空のファイル（記号だけの文など）は再生せずに終わったことにする
+            Task { @MainActor [weak self] in
+                self?.utteranceDidPlayBack(token: token)
+            }
+        }
+    }
+
+    private func utteranceDidPlayBack(token: Int) {
+        guard let utterance = current, utterance.token == token, generation == token else { return }
+        current = nil
+        utterance.onFinish(.success(()))
+        // 続けて次の文の speak が呼ばれていなければ、エンジンを止める
+        if generation == token {
+            stopEngineIfIdle()
+        }
+    }
+
+    /// 再生中の文を中断する（フェードアウトしてから止める）。
+    private func interruptCurrent() {
+        guard let utterance = current else { return }
+        current = nil
+        guard utterance.fileURL != nil, engine.isRunning else {
+            // まだ合成待ちなら音は出ていない
+            pendingGap = engine.isRunning ? Self.interruptedGapDuration : Self.leadInDuration
+            return
+        }
+        pendingGap = Self.interruptedGapDuration
+        let player = player
+        let previousFade = fadeOut
+        fadeOut = Task { @MainActor in
+            if let previousFade {
+                await previousFade.value
+            }
+            let stepDuration = Self.fadeOutDuration / Double(Self.fadeOutSteps)
+            for step in stride(from: Self.fadeOutSteps - 1, through: 0, by: -1) {
+                player.volume = Float(step) / Float(Self.fadeOutSteps)
+                try? await Task.sleep(for: .seconds(stepDuration))
+            }
+            player.stop()
+            player.volume = 1
+        }
+    }
+
+    private func startEngineIfNeeded(for fileFormat: AVAudioFormat) throws {
+        if !isPlayerAttached {
+            engine.attach(player)
+            try engine.connectNode(player, to: engine.mainMixerNode, format: format)
+            isPlayerAttached = true
+        }
+        // 合成フォーマットは固定しているが、万一違うファイルが来たら接続を合わせる
+        let connected = player.outputFormat(forBus: 0)
+        if connected.sampleRate != fileFormat.sampleRate || connected.channelCount != fileFormat.channelCount {
+            player.stop()
+            engine.disconnectNodeOutput(player)
+            try engine.connectNode(player, to: engine.mainMixerNode, format: fileFormat)
+        }
+        guard !engine.isRunning else { return }
+        engine.prepare()
+        try engine.start()
+        pendingGap = Self.leadInDuration
+    }
+
+    private func stopEngineIfIdle() {
+        guard current == nil, engine.isRunning else { return }
+        player.stop()
+        engine.stop()
+        pendingGap = Self.leadInDuration
+    }
+
+    private func scheduleSilence(duration: TimeInterval) {
+        let playerFormat = player.outputFormat(forBus: 0)
+        let frames = AVAudioFrameCount(duration * playerFormat.sampleRate)
+        guard frames > 0, let buffer = AVAudioPCMBuffer(pcmFormat: playerFormat, frameCapacity: frames) else { return }
+        buffer.frameLength = frames
+        // AVAudioPCMBuffer は確保時にゼロ初期化されるので、そのまま無音として使える
+        player.scheduleBuffer(buffer)
+    }
+
+    /// 出力デバイスの切り替えなどでエンジンが止まったら、再生中の文を頭から流し直す。
+    private func engineConfigurationDidChange() {
+        guard let utterance = current, utterance.fileURL != nil else { return }
+        player.stop()
+        engine.stop()
+        play(utterance)
+    }
+
+    // MARK: - Cache directory
+
+    /// 以前の起動（異常終了など）が残した一時ディレクトリを削除する。
+    private static func removeStaleCacheDirectories(in base: URL, keeping current: URL) {
+        let fileManager = FileManager.default
+        guard let items = try? fileManager.contentsOfDirectory(at: base, includingPropertiesForKeys: nil) else { return }
+        for item in items where item.lastPathComponent.hasPrefix("Speech-") && item != current {
+            try? fileManager.removeItem(at: item)
+        }
+    }
+}

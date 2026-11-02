@@ -35,25 +35,27 @@ final class ReaderModel {
     private var storedVoice: String?
     private var storedRate: Double
 
-    @ObservationIgnored private let speaker = SayCommandSpeaker()
+    @ObservationIgnored private let speaker = SpeechPlayer()
     @ObservationIgnored private let storage = Storage()
     @ObservationIgnored private var reachedEnd = false
 
-    /// `say -v` に渡す音声名（nil ならシステム既定）
+    /// `say -v` に渡す音声名（nil ならシステム既定）。読み上げ中に変えると次の文から反映される。
     var selectedVoice: String? {
         get { storedVoice }
         set {
             storedVoice = newValue
             UserDefaults.standard.set(newValue, forKey: DefaultsKey.voice)
+            prefetchNextSentence()
         }
     }
 
-    /// `say -r` に渡す速度（語/分）
+    /// `say -r` に渡す速度（語/分）。読み上げ中に変えると次の文から反映される。
     var rate: Double {
         get { storedRate }
         set {
             storedRate = newValue
             UserDefaults.standard.set(newValue, forKey: DefaultsKey.rate)
+            prefetchNextSentence()
         }
     }
 
@@ -213,27 +215,24 @@ final class ReaderModel {
 
     private func speakCurrentSentence() {
         guard isPlaying, let sentence = currentSentence else { return }
-        do {
-            try speaker.speak(sentence, voice: selectedVoice, rate: Int(rate)) { [weak self] status in
-                self?.sentenceDidFinish(status: status)
-            }
-        } catch {
-            isPlaying = false
-            reportError(
-                "say コマンドを起動できませんでした: \(error.localizedDescription)"
-                    + autosaveResultSuffix()
-            )
+        speaker.speak(sentence, voice: selectedVoice, rate: Int(rate)) { [weak self] result in
+            self?.sentenceDidFinish(result)
         }
+        // 読んでいる間に次の文を合成しておき、文間の待ち時間を短くする
+        prefetchNextSentence()
     }
 
-    private func sentenceDidFinish(status: Int32) {
+    /// 次の文があれば、現在の声・速度で先に合成しておく（読み上げ中のみ）。
+    private func prefetchNextSentence() {
+        guard isPlaying, let document, document.sentences.indices.contains(currentIndex + 1) else { return }
+        speaker.prefetch(document.sentences[currentIndex + 1], voice: selectedVoice, rate: Int(rate))
+    }
+
+    private func sentenceDidFinish(_ result: Result<Void, Error>) {
         guard isPlaying else { return }
-        guard status == 0 else {
+        if case let .failure(error) = result {
             isPlaying = false
-            reportError(
-                "say コマンドが異常終了しました（終了コード \(status)）。音声の設定を確認してください。"
-                    + autosaveResultSuffix()
-            )
+            reportError("読み上げに失敗しました: \(error.localizedDescription)" + autosaveResultSuffix())
             return
         }
         if currentIndex + 1 < sentenceCount {
@@ -324,6 +323,7 @@ final class ReaderModel {
             speaker.stop()
             isPlaying = false
         }
+        speaker.removeTemporaryFiles()
         // 終了処理中はアラートを表示できないため、失敗は無視する
         try? autosave()
     }
