@@ -107,24 +107,23 @@ nonisolated enum SpeechSynthesizer {
             "-f", "-",
         ]
 
-        let status: Int32
         do {
-            status = try await runSay(arguments: arguments, input: Data(request.text.utf8))
+            let status = try await runSay(arguments: arguments, input: Data(request.text.utf8))
+            // キャンセルで say を終了した場合も終了コードは返ってくるので、ここで区別する
+            try Task.checkCancellation()
+            guard status == 0 else {
+                throw SpeechSynthesisError.commandFailed(status: status)
+            }
+            // 終了コードが 0 でも空のファイルになることがあるので、読み込めるか確かめる
+            do {
+                _ = try AVAudioFile(forReading: url)
+            } catch {
+                throw SpeechSynthesisError.unreadableOutput(underlying: error)
+            }
         } catch {
+            // 途中で終了した say が書きかけのファイルを残していても、失敗・キャンセル時は必ず消す
             try? FileManager.default.removeItem(at: url)
             throw error
-        }
-        try Task.checkCancellation()
-        guard status == 0 else {
-            try? FileManager.default.removeItem(at: url)
-            throw SpeechSynthesisError.commandFailed(status: status)
-        }
-        // 終了コードが 0 でも空のファイルになることがあるので、読み込めるか確かめる
-        do {
-            _ = try AVAudioFile(forReading: url)
-        } catch {
-            try? FileManager.default.removeItem(at: url)
-            throw SpeechSynthesisError.unreadableOutput(underlying: error)
         }
     }
 

@@ -34,6 +34,9 @@ final class SpeechPlayer {
     private var current: Utterance?
     /// `speak`・`stop` のたびに進める世代番号。古い完了通知を捨てるために使う。
     private var generation = 0
+    /// 再生を開始（または流し直し）するたびに進める番号。`AVAudioPlayerNode.stop()` は未再生分の完了通知も
+    /// 呼ぶので、同じ文を流し直したときに古い試行の通知を読了と取り違えないように、世代番号とは別に持つ。
+    private var playbackAttempt = 0
     /// 進行中のフェードアウト。次の文はこれが終わってから流す。
     private var fadeOut: Task<Void, Never>?
     /// 次の文の前に置く無音の長さ
@@ -161,6 +164,12 @@ final class SpeechPlayer {
             return url
         }
         synthesisTasks[request] = task
+        // 失敗した合成はキャッシュに残さない（残すと同じ文の再生が合成し直されずに失敗し続ける）
+        Task { [weak self] in
+            guard (try? await task.value) == nil else { return }
+            guard let self, self.synthesisTasks[request] == task else { return }
+            self.synthesisTasks.removeValue(forKey: request)
+        }
         return task
     }
 
@@ -197,23 +206,26 @@ final class SpeechPlayer {
         }
 
         let token = utterance.token
+        playbackAttempt &+= 1
+        let attempt = playbackAttempt
         scheduleSilence(duration: pendingGap)
         pendingGap = Self.sentenceGapDuration
         if file.length > 0 {
             player.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
                 Task { @MainActor [weak self] in
-                    self?.utteranceDidPlayBack(token: token)
+                    self?.utteranceDidPlayBack(token: token, attempt: attempt)
                 }
             }
         } else {
             // 空のファイル（記号だけの文など）は再生せずに終わったことにする
             Task { @MainActor [weak self] in
-                self?.utteranceDidPlayBack(token: token)
+                self?.utteranceDidPlayBack(token: token, attempt: attempt)
             }
         }
     }
 
-    private func utteranceDidPlayBack(token: Int) {
+    private func utteranceDidPlayBack(token: Int, attempt: Int) {
+        guard attempt == playbackAttempt else { return }
         guard let utterance = current, utterance.token == token, generation == token else { return }
         current = nil
         utterance.onFinish(.success(()))
@@ -287,6 +299,8 @@ final class SpeechPlayer {
     /// 出力デバイスの切り替えなどでエンジンが止まったら、再生中の文を頭から流し直す。
     private func engineConfigurationDidChange() {
         guard let utterance = current, utterance.fileURL != nil else { return }
+        // stop() が呼ぶ古い試行の完了通知を、流し直した文の読了と取り違えないようにする
+        playbackAttempt &+= 1
         player.stop()
         engine.stop()
         play(utterance)
