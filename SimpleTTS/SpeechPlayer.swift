@@ -7,6 +7,8 @@ import Foundation
 /// - 読み上げ中はエンジンを止めず、文と文の間も無音を流し続ける。出力デバイスの IO が文ごとに
 ///   止まったり起きたりしないので、デバイス側の立ち上がりで文頭が欠けることもない。
 /// - 停止・移動は短いフェードアウトのあとに止める（`say` を SIGTERM で切るとクリックになる）。
+/// - 速度は `AVAudioUnitTimePitch` で音程を保ったまま変える。合成は常に声の標準の速さで行うので、
+///   速度を変えても合成し直さず、読み上げ中の文にもすぐ反映される。
 ///
 /// `onFinish` は「その文を最後まで再生した」か「合成・再生に失敗した」ときだけ呼ばれる。
 /// `stop()` や次の `speak` で中断した文については呼ばれない。
@@ -23,8 +25,14 @@ final class SpeechPlayer {
 
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
+    private let timePitch = AVAudioUnitTimePitch()
     private let format = AVAudioFormat(standardFormatWithSampleRate: SpeechSynthesizer.sampleRate, channels: 1)!
-    private var isPlayerAttached = false
+    private var areNodesAttached = false
+
+    /// 再生速度（1 が声の標準の速さ）。読み上げ中に変えるとすぐ反映される。
+    var playbackRate: Float = 1 {
+        didSet { applyPlaybackRate() }
+    }
 
     /// 合成済み（または合成中）のファイル。現在の文と先読みした次の文だけを保持する。
     private var synthesisTasks: [SpeechRequest: Task<URL, Error>] = [:]
@@ -39,9 +47,18 @@ final class SpeechPlayer {
     private var playbackAttempt = 0
     /// 進行中のフェードアウト。次の文はこれが終わってから流す。
     private var fadeOut: Task<Void, Never>?
-    /// 次の文の前に置く無音の長さ
-    private var pendingGap: TimeInterval = SpeechPlayer.leadInDuration
+    /// 次の文の前に置く無音
+    private var pendingGap: Gap = .leadIn
     private var configurationObserver: NSObjectProtocol?
+
+    private enum Gap {
+        /// エンジン起動直後。出力デバイスが起き上がる時間なので、速度によらず実時間で確保する。
+        case leadIn
+        /// 前の文を最後まで読んだあと。読み上げの間合いなので、速度に合わせて縮める。
+        case sentence
+        /// 停止・移動で前の文を中断したあと。速度によらず実時間で確保する。
+        case interrupted
+    }
 
     private struct Utterance {
         let token: Int
@@ -59,6 +76,7 @@ final class SpeechPlayer {
             path: "Speech-\(ProcessInfo.processInfo.processIdentifier)", directoryHint: .isDirectory)
         Self.removeStaleCacheDirectories(in: base, keeping: cacheDirectory)
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        applyPlaybackRate()
 
         configurationObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
@@ -81,13 +99,12 @@ final class SpeechPlayer {
     func speak(
         _ text: String,
         voice: String?,
-        rate: Int,
         onFinish: @escaping (Result<Void, Error>) -> Void
     ) {
         interruptCurrent()
         generation &+= 1
         let token = generation
-        let request = SpeechRequest(text: text, voice: voice, rate: rate)
+        let request = SpeechRequest(text: text, voice: voice)
         current = Utterance(token: token, request: request, fileURL: nil, onFinish: onFinish)
 
         let synthesis = synthesisTask(for: request)
@@ -120,8 +137,8 @@ final class SpeechPlayer {
     }
 
     /// 次に読む見込みの文を先に合成しておく。
-    func prefetch(_ text: String, voice: String?, rate: Int) {
-        let request = SpeechRequest(text: text, voice: voice, rate: rate)
+    func prefetch(_ text: String, voice: String?) {
+        let request = SpeechRequest(text: text, voice: voice)
         _ = synthesisTask(for: request)
         var keep: Set<SpeechRequest> = [request]
         if let current {
@@ -208,8 +225,8 @@ final class SpeechPlayer {
         let token = utterance.token
         playbackAttempt &+= 1
         let attempt = playbackAttempt
-        scheduleSilence(duration: pendingGap)
-        pendingGap = Self.sentenceGapDuration
+        scheduleSilence(duration: silenceDuration(for: pendingGap))
+        pendingGap = .sentence
         if file.length > 0 {
             player.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
                 Task { @MainActor [weak self] in
@@ -241,10 +258,10 @@ final class SpeechPlayer {
         current = nil
         guard utterance.fileURL != nil, engine.isRunning else {
             // まだ合成待ちなら音は出ていない
-            pendingGap = engine.isRunning ? Self.interruptedGapDuration : Self.leadInDuration
+            pendingGap = engine.isRunning ? .interrupted : .leadIn
             return
         }
-        pendingGap = Self.interruptedGapDuration
+        pendingGap = .interrupted
         let player = player
         let previousFade = fadeOut
         fadeOut = Task { @MainActor in
@@ -262,29 +279,48 @@ final class SpeechPlayer {
     }
 
     private func startEngineIfNeeded(for fileFormat: AVAudioFormat) throws {
-        if !isPlayerAttached {
+        if !areNodesAttached {
             engine.attach(player)
-            try engine.connectNode(player, to: engine.mainMixerNode, format: format)
-            isPlayerAttached = true
+            engine.attach(timePitch)
+            try engine.connectNode(player, to: timePitch, format: format)
+            try engine.connectNode(timePitch, to: engine.mainMixerNode, format: format)
+            areNodesAttached = true
         }
         // 合成フォーマットは固定しているが、万一違うファイルが来たら接続を合わせる
         let connected = player.outputFormat(forBus: 0)
         if connected.sampleRate != fileFormat.sampleRate || connected.channelCount != fileFormat.channelCount {
             player.stop()
             engine.disconnectNodeOutput(player)
-            try engine.connectNode(player, to: engine.mainMixerNode, format: fileFormat)
+            engine.disconnectNodeOutput(timePitch)
+            try engine.connectNode(player, to: timePitch, format: fileFormat)
+            try engine.connectNode(timePitch, to: engine.mainMixerNode, format: fileFormat)
         }
         guard !engine.isRunning else { return }
         engine.prepare()
         try engine.start()
-        pendingGap = Self.leadInDuration
+        pendingGap = .leadIn
     }
 
     private func stopEngineIfIdle() {
         guard current == nil, engine.isRunning else { return }
         player.stop()
         engine.stop()
-        pendingGap = Self.leadInDuration
+        pendingGap = .leadIn
+    }
+
+    private func applyPlaybackRate() {
+        timePitch.rate = playbackRate
+        // 1 倍では素通しにして、合成した波形をそのまま流す（通すと 1 倍でも波形がわずかに変わる）
+        timePitch.bypass = abs(playbackRate - 1) < 0.001
+    }
+
+    /// 無音として流す素材の長さ。素材は `timePitch` で縮むので、実時間で確保したい間はその分伸ばしておく。
+    private func silenceDuration(for gap: Gap) -> TimeInterval {
+        switch gap {
+        case .leadIn: Self.leadInDuration * Double(playbackRate)
+        case .sentence: Self.sentenceGapDuration
+        case .interrupted: Self.interruptedGapDuration * Double(playbackRate)
+        }
     }
 
     private func scheduleSilence(duration: TimeInterval) {

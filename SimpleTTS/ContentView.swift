@@ -177,14 +177,14 @@ private struct SpeechToolbarControls: View {
                 } label: {
                     Label("読み上げ設定", systemImage: "slider.horizontal.3")
                 }
-                .help("声と読み上げ速度（現在: \(model.selectedVoice ?? "システム既定の声")、\(Int(model.rate)) 語/分）")
+                .help("声と読み上げ速度（現在: \(model.selectedVoice ?? "システム既定の声")、\(rateText)）")
                 .popover(isPresented: $isPopoverPresented, arrowEdge: .bottom) {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("声")
                             .font(.headline)
                         voicePicker
                             .labelsHidden()
-                        Text("速度（次の文から反映）")
+                        Text("速度")
                             .font(.headline)
                         rateControl
                     }
@@ -219,14 +219,24 @@ private struct SpeechToolbarControls: View {
     private var rateControl: some View {
         HStack(spacing: 4) {
             Image(systemName: "tortoise")
-            Slider(value: $model.rate, in: 90...360, step: 10)
+            Slider(value: $model.rate, in: ReaderModel.rateRange, step: ReaderModel.rateStep)
                 .frame(width: 120)
+                .accessibilityLabel("読み上げ速度")
+                .accessibilityValue(rateText)
             Image(systemName: "hare")
-            Text("\(Int(model.rate))")
+            Text(rateText)
                 .monospacedDigit()
-                .frame(width: 32, alignment: .trailing)
+                .frame(width: 40, alignment: .trailing)
         }
-        .help("読み上げ速度（say -r、語/分）。次の文から反映されます")
+        .help("読み上げ速度（声の標準の速さに対する倍率、\(rateText(ReaderModel.rateRange.lowerBound))〜\(rateText(ReaderModel.rateRange.upperBound))）")
+    }
+
+    private var rateText: String {
+        rateText(model.rate)
+    }
+
+    private func rateText(_ rate: Double) -> String {
+        rate.formatted(.number.precision(.fractionLength(1))) + "×"
     }
 }
 

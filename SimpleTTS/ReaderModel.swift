@@ -17,9 +17,13 @@ final class ReaderModel {
     static let autoSaveLimit = 30
     /// 現在の文の前後に表示する文の数
     static let contextCount = 3
+    /// 読み上げ速度の範囲と刻み（声の標準の速さに対する倍率）
+    static let rateRange: ClosedRange<Double> = 0.5...2.0
+    static let rateStep = 0.1
 
     private enum DefaultsKey {
-        static let rate = "speechRate"
+        /// 速度の倍率。以前は `say -r` の語/分を "speechRate" に保存していたが、意味が違うので別のキーにする。
+        static let rate = "speechRateMultiplier"
         static let voice = "voiceName"
     }
 
@@ -49,13 +53,13 @@ final class ReaderModel {
         }
     }
 
-    /// `say -r` に渡す速度（語/分）。読み上げ中に変えると次の文から反映される。
+    /// 読み上げ速度（声の標準の速さに対する倍率）。読み上げ中に変えるとすぐ反映される。
     var rate: Double {
         get { storedRate }
         set {
-            storedRate = newValue
-            UserDefaults.standard.set(newValue, forKey: DefaultsKey.rate)
-            prefetchNextSentence()
+            storedRate = Self.normalizedRate(newValue)
+            UserDefaults.standard.set(storedRate, forKey: DefaultsKey.rate)
+            speaker.playbackRate = Float(storedRate)
         }
     }
 
@@ -63,7 +67,8 @@ final class ReaderModel {
         let defaults = UserDefaults.standard
         storedVoice = defaults.string(forKey: DefaultsKey.voice)
         let savedRate = defaults.double(forKey: DefaultsKey.rate)
-        storedRate = savedRate > 0 ? savedRate : 180
+        storedRate = savedRate > 0 ? Self.normalizedRate(savedRate) : 1
+        speaker.playbackRate = Float(storedRate)
 
         do {
             saves = try storage.loadSaves()
@@ -215,17 +220,17 @@ final class ReaderModel {
 
     private func speakCurrentSentence() {
         guard isPlaying, let sentence = currentSentence else { return }
-        speaker.speak(sentence, voice: selectedVoice, rate: Int(rate)) { [weak self] result in
+        speaker.speak(sentence, voice: selectedVoice) { [weak self] result in
             self?.sentenceDidFinish(result)
         }
         // 読んでいる間に次の文を合成しておき、文間の待ち時間を短くする
         prefetchNextSentence()
     }
 
-    /// 次の文があれば、現在の声・速度で先に合成しておく（読み上げ中のみ）。
+    /// 次の文があれば、現在の声で先に合成しておく（読み上げ中のみ）。
     private func prefetchNextSentence() {
         guard isPlaying, let document, document.sentences.indices.contains(currentIndex + 1) else { return }
-        speaker.prefetch(document.sentences[currentIndex + 1], voice: selectedVoice, rate: Int(rate))
+        speaker.prefetch(document.sentences[currentIndex + 1], voice: selectedVoice)
     }
 
     private func sentenceDidFinish(_ result: Result<Void, Error>) {
@@ -390,6 +395,13 @@ final class ReaderModel {
         } else {
             errorMessage = message
         }
+    }
+
+    /// 速度を範囲内に収め、刻みに丸める（スライダーの値には 1.0000000000000002 のような誤差が乗る）。
+    private static func normalizedRate(_ value: Double) -> Double {
+        // 刻みを掛けると 0.30000000000000004 のような誤差が残るので、刻みの逆数で割る
+        let stepped = (value / rateStep).rounded() / (1 / rateStep)
+        return min(max(stepped, rateRange.lowerBound), rateRange.upperBound)
     }
 
     private static func loadFailureMessage(for error: Error) -> String {

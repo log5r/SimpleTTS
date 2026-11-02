@@ -58,8 +58,6 @@ nonisolated struct SpeechRequest: Hashable, Sendable {
     let text: String
     /// `say -v` に渡す音声名（nil または空ならシステム既定の声）
     let voice: String?
-    /// `say -r` に渡す速度（語/分）
-    let rate: Int
 }
 
 nonisolated enum SpeechSynthesisError: LocalizedError {
@@ -87,6 +85,9 @@ nonisolated enum SpeechSynthesisError: LocalizedError {
 /// ほぼ 0 まで落ちて 2 ms かけて戻る不連続が毎回入り、「プツッ」というノイズになる
 /// （`docs/speech-start-noise-investigation.md`）。ファイルに合成した波形にはこの不連続がないので、
 /// 合成と再生を分け、再生はアプリ内の `SpeechPlayer` が `AVAudioEngine` で行う。
+///
+/// 速度（`say -r`）は指定せず、声の標準の速さで合成する。`-r` の効き方は声によって大きく違い、
+/// 既定の声では 180〜400 語/分の間で長さがほとんど変わらない。速度は再生側で変える。
 nonisolated enum SpeechSynthesizer {
     /// 合成するサンプルレート。`SpeechPlayer` の再生フォーマットと一致させる。
     static let sampleRate: Double = 48000
@@ -95,7 +96,7 @@ nonisolated enum SpeechSynthesizer {
     /// タスクがキャンセルされたら `say` を終了し、`CancellationError` を投げる。
     /// 失敗時・キャンセル時は `url` のファイルを残さない。
     static func synthesize(_ request: SpeechRequest, to url: URL) async throws {
-        var arguments = ["-r", String(request.rate)]
+        var arguments: [String] = []
         if let voice = request.voice, !voice.isEmpty {
             arguments += ["-v", voice]
         }
