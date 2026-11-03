@@ -213,13 +213,13 @@ final class ReaderModel {
             }.value
         } catch {
             if generation == lifecycleGeneration {
-                errorMessage = "Could not open the file: \(error.localizedDescription)"
+                errorMessage = String(localized: "Could not open the file: \(error.localizedDescription)")
             }
             return
         }
         guard generation == lifecycleGeneration else { return }
         guard !newDocument.sentences.isEmpty else {
-            errorMessage = "“\(url.lastPathComponent)” has no text to read aloud."
+            errorMessage = String(localized: "“\(url.lastPathComponent)” has no text to read aloud.")
             return
         }
 
@@ -232,17 +232,17 @@ final class ReaderModel {
                 try storage.storeDocumentText(text, id: newDocument.id)
                 currentDocumentIsStored = true
             } catch {
-                errorMessage = "Could not store the document text. History will not be saved for this document: \(error.localizedDescription)"
+                errorMessage = String(localized: "Could not store the document text. History will not be saved for this document: \(error.localizedDescription)")
             }
         }
         document = newDocument
         reachedEnd = false
         if retainsDocuments, let autosave = autoSaves.first(where: { $0.documentID == newDocument.id }) {
             currentIndex = clampedIndex(autosave.sentenceIndex, in: newDocument)
-            statusMessage = "Ready to resume at sentence \(currentIndex + 1)."
+            statusMessage = String(localized: "Ready to resume at sentence \(currentIndex + 1).")
         } else {
             currentIndex = 0
-            statusMessage = "Opened “\(newDocument.title)”. Total sentences: \(newDocument.sentences.count)."
+            statusMessage = String(localized: "Opened “\(newDocument.title)”. Total sentences: \(newDocument.sentences.count).")
         }
     }
 
@@ -278,11 +278,12 @@ final class ReaderModel {
         isPlaying = false
         do {
             try autosave()
-            statusMessage = "Paused at sentence \(currentIndex + 1)."
-                + (savesCurrentDocument ? " Position auto-saved." : " History will not be saved.")
+            statusMessage = savesCurrentDocument
+                ? String(localized: "Paused at sentence \(currentIndex + 1). Position auto-saved.")
+                : String(localized: "Paused at sentence \(currentIndex + 1). History will not be saved.")
         } catch {
-            statusMessage = "Paused at sentence \(currentIndex + 1)."
-            reportError("Playback paused, but the position could not be auto-saved: \(error.localizedDescription)")
+            statusMessage = String(localized: "Paused at sentence \(currentIndex + 1).")
+            reportError(String(localized: "Playback paused, but the position could not be auto-saved: \(error.localizedDescription)"))
         }
     }
 
@@ -319,7 +320,7 @@ final class ReaderModel {
         guard isPlaying else { return }
         if case let .failure(error) = result {
             isPlaying = false
-            reportError("Could not read aloud: \(error.localizedDescription)" + autosaveResultSuffix())
+            reportError(playbackFailureMessage(for: error))
             return
         }
         if currentIndex + 1 < sentenceCount {
@@ -330,22 +331,24 @@ final class ReaderModel {
             reachedEnd = true
             do {
                 try autosave()
-                statusMessage = "Finished reading. Press Play to start again from the beginning."
+                statusMessage = String(localized: "Finished reading. Press Play to start again from the beginning.")
             } catch {
-                statusMessage = "Finished reading."
-                reportError("Finished reading, but the position could not be auto-saved: \(error.localizedDescription)")
+                statusMessage = String(localized: "Finished reading.")
+                reportError(String(localized: "Finished reading, but the position could not be auto-saved: \(error.localizedDescription)"))
             }
         }
     }
 
-    /// オートセーブを試み、その結果をエラーメッセージの末尾に付ける文言で返す。
-    private func autosaveResultSuffix() -> String {
-        guard savesCurrentDocument else { return " (History will not be saved.)" }
+    /// オートセーブを試み、読み上げエラーと保存結果をまとめてローカライズする。
+    private func playbackFailureMessage(for playbackError: Error) -> String {
+        guard savesCurrentDocument else {
+            return String(localized: "Could not read aloud: \(playbackError.localizedDescription) (History will not be saved.)")
+        }
         do {
             try autosave()
-            return " (Position auto-saved at sentence \(currentIndex + 1).)"
-        } catch {
-            return " (The position also could not be auto-saved: \(error.localizedDescription))"
+            return String(localized: "Could not read aloud: \(playbackError.localizedDescription) (Position auto-saved at sentence \(currentIndex + 1).)")
+        } catch let saveError {
+            return String(localized: "Could not read aloud: \(playbackError.localizedDescription) (The position also could not be auto-saved: \(saveError.localizedDescription))")
         }
     }
 
@@ -355,14 +358,14 @@ final class ReaderModel {
     func saveManually() {
         guard canSaveManually, let document else { return }
         guard manualSaves.count < Self.manualSaveLimit else {
-            errorMessage = "You can keep up to \(Self.manualSaveLimit) saved positions. Delete a saved position to make room."
+            errorMessage = String(localized: "You can keep up to \(Self.manualSaveLimit) saved positions. Delete a saved position to make room.")
             return
         }
         do {
             try commitSaves(saves + [makeSavePoint(kind: .manual, document: document)])
-            statusMessage = "Saved position at sentence \(currentIndex + 1) (\(manualSaves.count)/\(Self.manualSaveLimit))."
+            statusMessage = String(localized: "Saved position at sentence \(currentIndex + 1) (\(manualSaves.count)/\(Self.manualSaveLimit)).")
         } catch {
-            reportError("Could not save the position: \(error.localizedDescription)")
+            reportError(String(localized: "Could not save the position: \(error.localizedDescription)"))
         }
     }
 
@@ -371,11 +374,11 @@ final class ReaderModel {
         guard !isBusy else { return }
         stop()
         guard let text = storage.loadDocumentText(id: save.documentID) else {
-            reportError("The text for “\(save.documentTitle)” could not be found. Open the original file again.")
+            reportError(String(localized: "The text for “\(save.documentTitle)” could not be found. Open the original file again."))
             return
         }
         apply(save, text: text)
-        statusMessage = "Loaded “\(save.documentTitle)” at sentence \(currentIndex + 1). Press Play to resume."
+        statusMessage = String(localized: "Loaded “\(save.documentTitle)” at sentence \(currentIndex + 1). Press Play to resume.")
     }
 
     func delete(_ save: SavePoint) {
@@ -384,7 +387,7 @@ final class ReaderModel {
             try commitSaves(saves.filter { $0.id != save.id })
         } catch {
             // 一覧の保存に失敗したら、一覧も本文キャッシュもそのままにする
-            reportError("Could not delete the saved position: \(error.localizedDescription)")
+            reportError(String(localized: "Could not delete the saved position: \(error.localizedDescription)"))
             return
         }
         var referenced = Set(saves.map(\.documentID))
@@ -406,7 +409,7 @@ final class ReaderModel {
         #else
         UIPasteboard.general.string = sentence
         #endif
-        statusMessage = "Copied the current sentence."
+        statusMessage = String(localized: "Copied the current sentence.")
     }
 
     // MARK: - Lifecycle
@@ -435,20 +438,21 @@ final class ReaderModel {
         do {
             try await speaker.clearTemporaryFiles()
         } catch {
-            failures.append("Generated audio: \(error.localizedDescription)")
+            failures.append(String(localized: "Generated audio: \(error.localizedDescription)"))
         }
         do {
             try storage.removeAllData()
             saves = []
         } catch {
-            failures.append("Document text and history: \(error.localizedDescription)")
+            failures.append(String(localized: "Document text and history: \(error.localizedDescription)"))
             saves = (try? storage.loadSaves()) ?? []
         }
         if failures.isEmpty {
-            dataDeletionMessage = "All saved data has been deleted."
+            dataDeletionMessage = String(localized: "All saved data has been deleted.")
             statusMessage = dataDeletionMessage
         } else {
-            dataDeletionError = "Some data could not be deleted. Please try again.\n" + failures.joined(separator: "\n")
+            let details = failures.joined(separator: "\n")
+            dataDeletionError = String(localized: "Some data could not be deleted. Please try again.\n\(details)")
         }
     }
 
@@ -521,7 +525,7 @@ final class ReaderModel {
         guard let latest = autoSaves.first,
               let text = storage.loadDocumentText(id: latest.documentID) else { return }
         apply(latest, text: text)
-        statusMessage = "Restored “\(latest.documentTitle)” at sentence \(currentIndex + 1)."
+        statusMessage = String(localized: "Restored “\(latest.documentTitle)” at sentence \(currentIndex + 1).")
     }
 
     private func apply(_ save: SavePoint, text: String) {
@@ -589,11 +593,11 @@ final class ReaderModel {
 
     private static func loadFailureMessage(for error: Error) -> String {
         guard case let StorageError.savesUnreadable(underlying, backupURL) = error else {
-            return "Could not load saved positions: \(error.localizedDescription)"
+            return String(localized: "Could not load saved positions: \(error.localizedDescription)")
         }
         if let backupURL {
-            return "Could not load saved positions. The original data has been moved to “\(backupURL.lastPathComponent)”, and document text has been kept: \(underlying.localizedDescription)"
+            return String(localized: "Could not load saved positions. The original data has been moved to “\(backupURL.lastPathComponent)”, and document text has been kept: \(underlying.localizedDescription)")
         }
-        return "Could not load or move the saved data. Saving is disabled for this session to protect the original data: \(underlying.localizedDescription)"
+        return String(localized: "Could not load or move the saved data. Saving is disabled for this session to protect the original data: \(underlying.localizedDescription)")
     }
 }

@@ -15,11 +15,11 @@ nonisolated enum StorageError: LocalizedError {
         case let .savesUnreadable(underlying, _):
             return underlying.localizedDescription
         case .writeBlocked:
-            return "Saving is disabled to protect saved data that could not be read."
+            return String(localized: "Saving is disabled to protect saved data that could not be read.")
         case .invalidDocumentID:
-            return "The document identifier is invalid."
+            return String(localized: "The document identifier is invalid.")
         case .unsafeStorageDirectory:
-            return "Cannot save because the storage location is a link or is not a regular folder."
+            return String(localized: "Cannot save because the storage location is a link or is not a regular folder.")
         }
     }
 }

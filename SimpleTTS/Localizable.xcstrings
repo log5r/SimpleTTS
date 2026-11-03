@@ -1,0 +1,1159 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "%@ (%@)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@（%@）"
+          }
+        }
+      }
+    },
+    "%@ Enhanced": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 拡張"
+          }
+        }
+      }
+    },
+    "%@ Premium": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ プレミアム"
+          }
+        }
+      }
+    },
+    "%lld / %lld": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld / %lld"
+          }
+        }
+      }
+    },
+    "All saved data has been deleted.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存データをすべて削除しました。"
+          }
+        }
+      }
+    },
+    "Automatic": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オートセーブ"
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャンセル"
+          }
+        }
+      }
+    },
+    "Cannot save because the storage location is a link or is not a regular folder.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存先にリンクまたは通常のフォルダではない項目があるため、保存できません。"
+          }
+        }
+      }
+    },
+    "Choose Open File to select a .txt file.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「ファイルを開く」から .txt ファイルを選んでください。"
+          }
+        }
+      }
+    },
+    "Choose Save Position while paused to add one.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時停止中に「セーブ」を押すと追加できます。"
+          }
+        }
+      }
+    },
+    "Choose a plain text file.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プレーンテキストのファイルを選んでください。"
+          }
+        }
+      }
+    },
+    "Choose a regular text file. Folders and links cannot be opened.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通常のテキストファイルを選んでください。フォルダやリンクは開けません。"
+          }
+        }
+      }
+    },
+    "Choose a text file no larger than 10 MiB.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "10 MiB 以下のテキストファイルを選んでください。"
+          }
+        }
+      }
+    },
+    "Choose a text file on your device. Web URLs cannot be opened.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端末上のテキストファイルを選んでください。Web の URL は開けません。"
+          }
+        }
+      }
+    },
+    "Closes the current document and deletes stored documents, history, recovery copies, and generated audio. Original files, clipboard contents, and existing backups are not deleted.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在の文書を閉じ、保存した本文、履歴、復旧用の退避ファイル、生成した音声を削除します。元ファイル、クリップボードの内容、既存のバックアップは削除しません。"
+          }
+        }
+      }
+    },
+    "Copied the current sentence.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フォーカス中の文章をコピーしました。"
+          }
+        }
+      }
+    },
+    "Copy Sentence": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コピー"
+          }
+        }
+      }
+    },
+    "Copy the current sentence while paused (⇧⌘C)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時停止中の文をコピー（⇧⌘C）"
+          }
+        }
+      }
+    },
+    "Could not convert the generated audio.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合成した音声を変換できませんでした。"
+          }
+        }
+      }
+    },
+    "Could not convert the generated audio: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合成した音声を変換できませんでした: %@"
+          }
+        }
+      }
+    },
+    "Could not delete the saved position: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セーブを削除できませんでした: %@"
+          }
+        }
+      }
+    },
+    "Could not load or move the saved data. Saving is disabled for this session to protect the original data: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セーブデータを読み込めず、退避もできませんでした。元のデータを守るため、このセッションではセーブを書き込みません: %@"
+          }
+        }
+      }
+    },
+    "Could not load saved positions. The original data has been moved to “%@”, and document text has been kept: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セーブデータを読み込めませんでした。元のデータは「%@」に退避し、本文は保持しています: %@"
+          }
+        }
+      }
+    },
+    "Could not load saved positions: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セーブデータを読み込めませんでした: %@"
+          }
+        }
+      }
+    },
+    "Could not open the file: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファイルを開けませんでした: %@"
+          }
+        }
+      }
+    },
+    "Could not read aloud: %@ (History will not be saved.)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み上げに失敗しました: %@（履歴は保存しません）"
+          }
+        }
+      }
+    },
+    "Could not read aloud: %@ (Position auto-saved at sentence %lld.)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み上げに失敗しました: %@（%lld文目をオートセーブしました）"
+          }
+        }
+      }
+    },
+    "Could not read aloud: %@ (The position also could not be auto-saved: %@)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み上げに失敗しました: %@（位置のオートセーブにも失敗しました: %@）"
+          }
+        }
+      }
+    },
+    "Could not read the generated audio file.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合成した音声ファイルを読み込めませんでした。"
+          }
+        }
+      }
+    },
+    "Could not read the generated audio file: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合成した音声ファイルを読み込めませんでした: %@"
+          }
+        }
+      }
+    },
+    "Could not save the generated audio: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合成した音声を保存できませんでした: %@"
+          }
+        }
+      }
+    },
+    "Could not save the position: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セーブに失敗しました: %@"
+          }
+        }
+      }
+    },
+    "Could not store the document text. History will not be saved for this document: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本文を保存できなかったため、この文書の履歴は保存しません: %@"
+          }
+        }
+      }
+    },
+    "Data Use": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "データの扱い"
+          }
+        }
+      }
+    },
+    "Delete": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "削除"
+          }
+        }
+      }
+    },
+    "Delete All": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべて削除"
+          }
+        }
+      }
+    },
+    "Delete All Saved Data…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存データをすべて削除…"
+          }
+        }
+      }
+    },
+    "Delete Data": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "データの削除"
+          }
+        }
+      }
+    },
+    "Delete all saved data?": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存データをすべて削除しますか？"
+          }
+        }
+      }
+    },
+    "Delete this saved position?": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このセーブを削除しますか？"
+          }
+        }
+      }
+    },
+    "Delete…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "削除…"
+          }
+        }
+      }
+    },
+    "Deleting…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "削除中…"
+          }
+        }
+      }
+    },
+    "Document text and history: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本文と履歴: %@"
+          }
+        }
+      }
+    },
+    "Documents and history stay on your device. The app does not upload them to a server, and excludes its storage folder from system backups.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本文と履歴は端末内に保存します。サーバーへのアップロードは行わず、保存フォルダはシステムのバックアップ対象から除外します。"
+          }
+        }
+      }
+    },
+    "Done": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完了"
+          }
+        }
+      }
+    },
+    "Error": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エラー"
+          }
+        }
+      }
+    },
+    "Finished reading, but the position could not be auto-saved: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最後まで読み上げましたが、位置のオートセーブに失敗しました: %@"
+          }
+        }
+      }
+    },
+    "Finished reading.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最後まで読み上げました。"
+          }
+        }
+      }
+    },
+    "Finished reading. Press Play to start again from the beginning.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最後まで読み上げました。もう一度再生すると最初から読み上げます。"
+          }
+        }
+      }
+    },
+    "Generated audio: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成音声: %@"
+          }
+        }
+      }
+    },
+    "Go to Saved Position": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この位置から再開"
+          }
+        }
+      }
+    },
+    "Go to this saved position": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この位置から再開"
+          }
+        }
+      }
+    },
+    "Go to this sentence": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この文へ移動"
+          }
+        }
+      }
+    },
+    "Loaded “%@” at sentence %lld. Press Play to resume.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」の%lld文目を読み込みました。再生で続きから読み上げます。"
+          }
+        }
+      }
+    },
+    "Loading…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み込み中…"
+          }
+        }
+      }
+    },
+    "Next": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "次の文"
+          }
+        }
+      }
+    },
+    "Next sentence (⌘→)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "次の文へ（⌘→）"
+          }
+        }
+      }
+    },
+    "Now Playing": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再生情報"
+          }
+        }
+      }
+    },
+    "OK": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      }
+    },
+    "Open File…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファイルを開く…"
+          }
+        }
+      }
+    },
+    "Open a Text File": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "テキストファイルを開く"
+          }
+        }
+      }
+    },
+    "Open a text file (⌘O)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "テキストファイルを開く（⌘O）"
+          }
+        }
+      }
+    },
+    "Opened “%@”. Total sentences: %lld.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」を開きました（全%lld文）。"
+          }
+        }
+      }
+    },
+    "Open…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開く…"
+          }
+        }
+      }
+    },
+    "Pause": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時停止"
+          }
+        }
+      }
+    },
+    "Pause (Space)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時停止（スペース）"
+          }
+        }
+      }
+    },
+    "Paused": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時停止中"
+          }
+        }
+      }
+    },
+    "Paused at sentence %lld.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時停止しました（%lld文目）。"
+          }
+        }
+      }
+    },
+    "Paused at sentence %lld. History will not be saved.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時停止しました（%lld文目）。履歴は保存しません。"
+          }
+        }
+      }
+    },
+    "Paused at sentence %lld. Position auto-saved.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時停止しました（%lld文目）。位置をオートセーブしました。"
+          }
+        }
+      }
+    },
+    "Play": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再生"
+          }
+        }
+      }
+    },
+    "Play (Space)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再生（スペース）"
+          }
+        }
+      }
+    },
+    "Playback creates temporary audio files even when saving is disabled. These files are removed on normal exit and at the next launch.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存をオフにしていても、読み上げ時には一時的な音声ファイルを作成します。通常終了時と次回起動時に削除します。"
+          }
+        }
+      }
+    },
+    "Playback paused, but the position could not be auto-saved: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時停止しましたが、位置のオートセーブに失敗しました: %@"
+          }
+        }
+      }
+    },
+    "Playback will stop, and all documents, history, and generated audio stored by the app will be deleted. This cannot be undone. Original files and app settings will be kept.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み上げを停止し、アプリに保存した本文、履歴、生成した音声をすべて削除します。この操作は取り消せません。元ファイルとアプリの設定は残ります。"
+          }
+        }
+      }
+    },
+    "Press ⌘O or drop a .txt file into this window.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌘O を押すか、このウィンドウに .txt ファイルをドロップしてください。"
+          }
+        }
+      }
+    },
+    "Previous": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前の文"
+          }
+        }
+      }
+    },
+    "Previous sentence (⌘←)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前の文へ（⌘←）"
+          }
+        }
+      }
+    },
+    "Privacy": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プライバシー"
+          }
+        }
+      }
+    },
+    "Privacy Settings": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プライバシー設定"
+          }
+        }
+      }
+    },
+    "Reading": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み上げ中"
+          }
+        }
+      }
+    },
+    "Ready to resume at sentence %lld.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前回停止した位置（%lld文目）から再開できます。"
+          }
+        }
+      }
+    },
+    "Restored “%@” at sentence %lld.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前回の「%@」（%lld文目）を復元しました。"
+          }
+        }
+      }
+    },
+    "Save Documents and History": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文書と履歴を保存"
+          }
+        }
+      }
+    },
+    "Save Position": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セーブ"
+          }
+        }
+      }
+    },
+    "Save the current position while paused (⌘S, up to %lld saved positions)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時停止中の位置を保存（⌘S、最大%lld件）"
+          }
+        }
+      }
+    },
+    "Saved Positions": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セーブ一覧"
+          }
+        }
+      }
+    },
+    "Saved Positions (%lld/%lld)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セーブ（%lld/%lld）"
+          }
+        }
+      }
+    },
+    "Saved position at sentence %lld (%lld/%lld).": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld文目をセーブしました（%lld/%lld）。"
+          }
+        }
+      }
+    },
+    "Saving is disabled to protect saved data that could not be read.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み込めなかったセーブデータを保護するため、セーブの書き込みを停止しています。"
+          }
+        }
+      }
+    },
+    "Sentence %lld of %lld": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%2$lld文中の%1$lld文目"
+          }
+        }
+      }
+    },
+    "Show Document Name on Lock Screen": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロック画面に文書名を表示"
+          }
+        }
+      }
+    },
+    "SimpleTTS": {
+      "shouldTranslate": false
+    },
+    "Some data could not be deleted. Please try again.\n%@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一部のデータを削除できませんでした。もう一度お試しください。\n%@"
+          }
+        }
+      }
+    },
+    "Speech Settings": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み上げ設定"
+          }
+        }
+      }
+    },
+    "Speech speed": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み上げ速度"
+          }
+        }
+      }
+    },
+    "Speech speed relative to the voice's normal rate (%@–%@)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "声の標準の速さに対する読み上げ速度（%@〜%@）"
+          }
+        }
+      }
+    },
+    "Speech synthesis stopped responding.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音声の合成が応答しなくなりました。"
+          }
+        }
+      }
+    },
+    "Speed": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "速度"
+          }
+        }
+      }
+    },
+    "Storage": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存"
+          }
+        }
+      }
+    },
+    "System Default": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "システム既定の声"
+          }
+        }
+      }
+    },
+    "The document identifier is invalid.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文書の識別子が不正です。"
+          }
+        }
+      }
+    },
+    "The say command failed (exit code %d). Check your voice settings.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "say コマンドが異常終了しました（終了コード %d）。音声の設定を確認してください。"
+          }
+        }
+      }
+    },
+    "The selected voice is not available on this device. Download it in Settings under Accessibility, or choose another voice.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択した声がこの端末にありません。設定アプリの「アクセシビリティ」で追加するか、別の声を選んでください。"
+          }
+        }
+      }
+    },
+    "The text for “%@” could not be found. Open the original file again.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」の本文が見つかりません。ファイルを開き直してください。"
+          }
+        }
+      }
+    },
+    "This document and its history will not be saved": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この文書の本文と履歴は保存しません"
+          }
+        }
+      }
+    },
+    "This file could not be read as text.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このファイルをテキストとして読み込めませんでした。"
+          }
+        }
+      }
+    },
+    "Voice": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "声"
+          }
+        }
+      }
+    },
+    "Voice and speed (currently %@, %@)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "声と速度（現在: %@、%@）"
+          }
+        }
+      }
+    },
+    "Voice used for speech": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み上げに使う声"
+          }
+        }
+      }
+    },
+    "When disabled, the title is shown as “SimpleTTS.” When enabled, the document name may also appear in Control Center and on connected devices.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフのときは「SimpleTTS」と表示します。オンにすると、コントロールセンターや接続先の機器にも文書名が表示されることがあります。"
+          }
+        }
+      }
+    },
+    "When enabled, the app saves the full text, document name, an excerpt, reading position, and date. Turning this off keeps existing saved data. To save a document opened with saving disabled, enable this setting and reopen it.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オンにすると、本文全体、文書名、本文の抜粋、読書位置、日時を保存します。オフにしても、以前の保存データは残ります。保存せずに開いた文書を保存する場合は、オンにしてから開き直してください。"
+          }
+        }
+      }
+    },
+    "You can keep up to %lld saved positions. Delete a saved position to make room.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セーブは最大%lld件までです。不要なセーブを削除してください。"
+          }
+        }
+      }
+    },
+    "Your position is saved here when you pause.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時停止した位置がここに保存されます。"
+          }
+        }
+      }
+    },
+    "“%@” has no text to read aloud.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」には読み上げる文章がありません。"
+          }
+        }
+      }
+    },
+    "“%@” — sentence %lld": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」の%lld文目"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

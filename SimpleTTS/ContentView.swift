@@ -77,7 +77,7 @@ struct ContentView: View {
                 case .success(let url):
                     Task { await model.openFile(at: url) }
                 case .failure(let error):
-                    model.errorMessage = "Could not open the file: \(error.localizedDescription)"
+                    model.errorMessage = String(localized: "Could not open the file: \(error.localizedDescription)")
                 }
             }
             .dropDestination(for: URL.self) { urls, _ in
@@ -259,7 +259,7 @@ private struct SpeechToolbarControls: View {
                 } label: {
                     Label("Speech Settings", systemImage: "slider.horizontal.3")
                 }
-                .help("Voice and speed (currently \(model.selectedVoiceName ?? "System Default"), \(rateText))")
+                .help("Voice and speed (currently \(model.selectedVoiceName ?? String(localized: "System Default")), \(rateText))")
                 .popover(isPresented: $isPopoverPresented, arrowEdge: .bottom) {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Voice")

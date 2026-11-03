@@ -1,4 +1,5 @@
 #if os(iOS)
+import Foundation
 import MediaPlayer
 
 /// ロック画面やコントロールセンターの「再生中」表示と、そこからの操作（再生・一時停止・前後の文）をつなぐ。
@@ -49,7 +50,7 @@ final class NowPlayingController {
 
         center.nowPlayingInfo = [
             MPMediaItemPropertyTitle: state.title,
-            MPMediaItemPropertyArtist: "Sentence \(state.sentenceIndex + 1) of \(state.sentenceCount)",
+            MPMediaItemPropertyArtist: String(localized: "Sentence \(state.sentenceIndex + 1) of \(state.sentenceCount)"),
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
             MPNowPlayingInfoPropertyPlaybackRate: state.isPlaying ? 1.0 : 0.0,
             // 文書名の表示を許可した場合も、システムのコンテンツ提案には使わせない。

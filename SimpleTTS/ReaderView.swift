@@ -100,7 +100,7 @@ struct ReaderView: View {
                     }
                 }
                 .labelStyle(AdaptiveLabelStyle(iconOnly: widthClass != .regular))
-                .help(model.isPlaying ? "Reading" : "Paused")
+                .help(model.isPlaying ? LocalizedStringKey("Reading") : LocalizedStringKey("Paused"))
                 .fixedSize()
                 Text("\(model.currentIndex + 1) / \(model.sentenceCount)")
                     .monospacedDigit()
@@ -222,7 +222,7 @@ private struct ControlBar: View {
                         model.togglePlayback()
                     } label: {
                         Label(
-                            model.isPlaying ? "Pause" : "Play",
+                            model.isPlaying ? LocalizedStringKey("Pause") : LocalizedStringKey("Play"),
                             systemImage: model.isPlaying ? "pause.fill" : "play.fill"
                         )
                         .labelStyle(.titleAndIcon)
@@ -231,7 +231,7 @@ private struct ControlBar: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .keyboardShortcut(.space, modifiers: [])
-                    .help(model.isPlaying ? "Pause (Space)" : "Play (Space)")
+                    .help(model.isPlaying ? LocalizedStringKey("Pause (Space)") : LocalizedStringKey("Play (Space)"))
 
                     Button {
                         model.step(by: 1)

@@ -12,15 +12,15 @@ nonisolated enum TextFileError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .localFileRequired:
-            return "Choose a text file on your device. Web URLs cannot be opened."
+            return String(localized: "Choose a text file on your device. Web URLs cannot be opened.")
         case .regularFileRequired:
-            return "Choose a regular text file. Folders and links cannot be opened."
+            return String(localized: "Choose a regular text file. Folders and links cannot be opened.")
         case .fileTooLarge:
-            return "Choose a text file no larger than 10 MiB."
+            return String(localized: "Choose a text file no larger than 10 MiB.")
         case .unsupportedFileType:
-            return "Choose a plain text file."
+            return String(localized: "Choose a plain text file.")
         case .invalidText:
-            return "This file could not be read as text."
+            return String(localized: "This file could not be read as text.")
         }
     }
 }

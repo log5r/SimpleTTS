@@ -52,12 +52,12 @@ nonisolated enum SpeechSynthesisError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case let .commandFailed(status):
-            return "The say command failed (exit code \(status)). Check your voice settings."
+            return String(localized: "The say command failed (exit code \(status)). Check your voice settings.")
         case let .unreadableOutput(underlying):
             if let underlying {
-                return "Could not read the generated audio file: \(underlying.localizedDescription)"
+                return String(localized: "Could not read the generated audio file: \(underlying.localizedDescription)")
             }
-            return "Could not read the generated audio file."
+            return String(localized: "Could not read the generated audio file.")
         }
     }
 }
