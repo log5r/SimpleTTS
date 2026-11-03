@@ -42,7 +42,7 @@ import UIKit
 
     private var fileCommands: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("開く…") {
+            Button("Open…") {
                 model.isImporterPresented = true
             }
             .keyboardShortcut("o", modifiers: [.command])

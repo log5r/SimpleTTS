@@ -1,6 +1,5 @@
-# Rule
+# Rules
 
-- Apple の Human Interface Guideline に従って実装すること
-- 可能な限りmacOS の標準コンポーネントを使用すること
-- SwiftUIにこだわらずに AppKit もためらわずに使うこと
-
+- Follow Apple's Human Interface Guidelines when implementing the app.
+- Use standard macOS components whenever possible.
+- Do not limit the implementation to SwiftUI; use AppKit where appropriate.

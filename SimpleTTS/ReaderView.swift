@@ -65,15 +65,15 @@ struct ReaderView: View {
             }
         } else {
             ContentUnavailableView {
-                Label("テキストファイルを開いてください", systemImage: "doc.text")
+                Label("Open a Text File", systemImage: "doc.text")
             } description: {
                 #if os(macOS)
-                Text("⌘O、またはウィンドウへのドラッグ＆ドロップで .txt ファイルを開けます。")
+                Text("Press ⌘O or drop a .txt file into this window.")
                 #else
-                Text("「ファイルを開く」から .txt ファイルを選んでください。")
+                Text("Choose Open File to select a .txt file.")
                 #endif
             } actions: {
-                Button("ファイルを開く…") {
+                Button("Open File…") {
                     model.isImporterPresented = true
                 }
             }
@@ -92,15 +92,15 @@ struct ReaderView: View {
                 Spacer(minLength: 8)
                 Group {
                     if model.isPlaying {
-                        Label("読み上げ中", systemImage: "speaker.wave.2.fill")
+                        Label("Reading", systemImage: "speaker.wave.2.fill")
                             .foregroundStyle(.tint)
                     } else {
-                        Label("一時停止中", systemImage: "pause.circle")
+                        Label("Paused", systemImage: "pause.circle")
                             .foregroundStyle(.secondary)
                     }
                 }
                 .labelStyle(AdaptiveLabelStyle(iconOnly: widthClass != .regular))
-                .help(model.isPlaying ? "読み上げ中" : "一時停止中")
+                .help(model.isPlaying ? "Reading" : "Paused")
                 .fixedSize()
                 Text("\(model.currentIndex + 1) / \(model.sentenceCount)")
                     .monospacedDigit()
@@ -109,7 +109,7 @@ struct ReaderView: View {
             }
             ProgressView(value: Double(model.currentIndex + 1), total: Double(max(model.sentenceCount, 1)))
             if !model.savesCurrentDocument {
-                Label("この文書の本文・履歴は保存しません", systemImage: "eye.slash")
+                Label("This document and its history will not be saved", systemImage: "eye.slash")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -185,7 +185,7 @@ private struct ContextColumn: View {
                     .opacity(opacity(for: sentence.id))
                     .contentShape(Rectangle())
                     .onTapGesture { onSelect(sentence.id) }
-                    .help("クリックでこの文へ移動")
+                    .help("Go to this sentence")
             }
         }
         // 高さが足りないときは文脈を縮め、見出しと操作列の領域を確保する。
@@ -212,17 +212,17 @@ private struct ControlBar: View {
                     Button {
                         model.step(by: -1)
                     } label: {
-                        Label("前の文", systemImage: "backward.end.fill")
+                        Label("Previous", systemImage: "backward.end.fill")
                     }
                     .disabled(!model.canStepBackward)
                     .keyboardShortcut(.leftArrow, modifiers: [.command])
-                    .help("前の文へ移動（⌘←）")
+                    .help("Previous sentence (⌘←)")
 
                     Button {
                         model.togglePlayback()
                     } label: {
                         Label(
-                            model.isPlaying ? "一時停止" : "再生",
+                            model.isPlaying ? "Pause" : "Play",
                             systemImage: model.isPlaying ? "pause.fill" : "play.fill"
                         )
                         .labelStyle(.titleAndIcon)
@@ -231,16 +231,16 @@ private struct ControlBar: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .keyboardShortcut(.space, modifiers: [])
-                    .help(model.isPlaying ? "一時停止（スペース）" : "再生（スペース）")
+                    .help(model.isPlaying ? "Pause (Space)" : "Play (Space)")
 
                     Button {
                         model.step(by: 1)
                     } label: {
-                        Label("次の文", systemImage: "forward.end.fill")
+                        Label("Next", systemImage: "forward.end.fill")
                     }
                     .disabled(!model.canStepForward)
                     .keyboardShortcut(.rightArrow, modifiers: [.command])
-                    .help("次の文へ移動（⌘→）")
+                    .help("Next sentence (⌘→)")
                 }
                 .labelStyle(AdaptiveLabelStyle(iconOnly: widthClass == .minimal))
 
@@ -251,20 +251,20 @@ private struct ControlBar: View {
                     Button {
                         model.saveManually()
                     } label: {
-                        Label("この位置をセーブ", systemImage: "bookmark")
+                        Label("Save Position", systemImage: "bookmark")
                     }
                     .disabled(!model.canSaveManually)
                     .keyboardShortcut("s", modifiers: [.command])
-                    .help("一時停止中に、現在の位置をセーブします（⌘S、最大\(ReaderModel.manualSaveLimit)件）")
+                    .help("Save the current position while paused (⌘S, up to \(ReaderModel.manualSaveLimit) saved positions)")
 
                     Button {
                         model.copyCurrentSentence()
                     } label: {
-                        Label("文章をコピー", systemImage: "doc.on.doc")
+                        Label("Copy Sentence", systemImage: "doc.on.doc")
                     }
                     .disabled(!model.canCopy)
                     .keyboardShortcut("c", modifiers: [.command, .shift])
-                    .help("一時停止中に、大写しの文章をコピーします（⇧⌘C）")
+                    .help("Copy the current sentence while paused (⇧⌘C)")
                 }
                 .labelStyle(AdaptiveLabelStyle(iconOnly: widthClass != .regular))
             }

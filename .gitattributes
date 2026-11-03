@@ -1,4 +1,4 @@
-# git archive に個人設定やローカル成果物を含めない。
+# Keep personal settings and local artifacts out of git archive exports.
 **/xcuserdata export-ignore
 **/xcuserdata/** export-ignore
 *.xcuserstate export-ignore

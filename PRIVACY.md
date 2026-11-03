@@ -1,51 +1,51 @@
-# SimpleTTS のデータの扱い
+# How SimpleTTS Handles Data
 
-SimpleTTS は、選択したテキストを OS 標準の音声で読み上げます。本文を外部サーバーへアップロードする処理、広告 SDK、アクセス解析 SDK はありません。ネットワーク URL を直接開くこともできません。
+SimpleTTS reads selected text using system voices. It has no document upload code, advertising SDKs, or analytics SDKs. It cannot open network URLs directly.
 
-音声の追加ダウンロードや、ファイル選択画面から選んだ iCloud Drive などのファイルの取得は、OS やファイルプロバイダーの機能です。それらの通信・保存は、各サービスの設定に従います。
+Downloading additional voices and retrieving files selected from iCloud Drive or other file providers are functions of the operating system or file provider. Their network and storage behavior follows the settings of those services.
 
-## 本文と履歴
+## Documents and history
 
-「文書と履歴を保存」がオンのときは、ファイルを開いた時点で本文全体をアプリ内にコピーします。読書位置を保存すると、文書名、位置、本文の最大 80 文字、日時も記録します。元ファイルを移動・削除しても読み上げを再開できるようにするための保存です。
+When **Save Documents and History** is on, opening a file copies its entire text into the app's storage. Saving a reading position also records the document name, position, up to 80 characters of text, and the date and time. This allows reading to resume even if the original file is moved or deleted.
 
-保存先は、アプリの Application Support 内にある `SimpleTTS` フォルダです。本文は `Documents/<本文の SHA-256>.txt`、履歴は `saves.json` に保存します。SHA-256 は文書を識別するためのファイル名で、本文の暗号化ではありません。アプリ独自の本文暗号化は行わず、端末のファイル保護やアカウントの保護に依存します。
+Data is stored in the `SimpleTTS` folder inside the app's Application Support directory. Document text is stored as `Documents/<SHA-256 of the text>.txt`, and history is stored in `saves.json`. The SHA-256 hash identifies the document; it does not encrypt the text. The app does not add its own text encryption and relies on the device's file and account protections.
 
-保存設定をオフにすると、現在の文書と、その後に開く文書の本文・履歴を新たに保存しません。以前に保存した本文や履歴は自動では削除されません。保存せずに読む場合は、文書を開く前に設定をオフにしてください。
+Turning saving off stops new document and history saves for the current document and any documents opened afterward. Previously saved documents and history are not automatically deleted. To read without saving, turn this setting off before opening the document.
 
-保存せずに開いた文書は、途中で設定をオンにしても保存しません。保存を始める場合は、設定をオンにしてから文書を開き直してください。設定がオフの間は、起動時に前回の文書を復元しません。
+A document opened without saving remains unsaved even if you turn saving on while reading it. To start saving that document, turn the setting on and reopen the file. While saving is off, the app does not restore the previous document at launch.
 
-声、読み上げ速度、プライバシー設定は、アプリの `UserDefaults` に保存します。
+Voice, playback speed, and privacy preferences are stored in the app's `UserDefaults`.
 
-## 削除できるデータ
+## Deleting data
 
-セーブ一覧の「削除」は、選択した読書位置の記録を削除します。別のセーブや開いている文書が本文を参照している場合、本文は残ります。開いている文書のオートセーブを削除した場合も、保存設定がオンなら、その後の停止・終了時に再び保存されます。
+**Delete** in the saved positions list removes the selected position record. The document text remains if another saved position or the currently open document still refers to it. If you delete the automatic save for the open document while saving is enabled, a later pause or app exit can create it again.
 
-アプリに残る文書情報をまとめて消すときは、プライバシー設定の「保存データをすべて削除…」を使ってください。この操作は、現在の文書を閉じ、保存した本文、全セーブ、破損データの退避ファイル、生成した一時音声を削除します。削除した文書を終了時に再保存しません。元のテキストファイルと、声・速度・プライバシー設定は残ります。
+To remove all document information retained by the app, use **Delete All Saved Data…** in Privacy settings. This closes the current document and deletes stored text, all saved positions, recovery copies of corrupted history, and generated temporary audio. The closed document is not saved again when the app exits. Original text files and voice, speed, and privacy preferences remain.
 
-読み込めない履歴は、復旧のため `saves.corrupted-*.json` に退避します。この退避ファイルがある間、通常のセーブ削除では本文の自動整理を保留します。一括削除では退避ファイルも削除対象になります。
+Unreadable history is moved to `saves.corrupted-*.json` for recovery. While such a file exists, deleting individual saved positions does not automatically prune stored document text. **Delete All Saved Data…** also removes these recovery files.
 
-削除はアプリの保存領域を対象とするファイル削除です。既存のバックアップ、元ファイル、クリップボードへコピーした文、他のアプリが保存した情報は削除しません。
+Deletion removes files from the app's storage. It does not remove existing backups, original files, sentences copied to the clipboard, or information saved by other apps.
 
-## 一時音声
+## Temporary audio
 
-読み上げ時は、現在の文と先読みする文を WAV ファイルに変換してから再生します。本文・履歴の保存設定がオフでも、この一時音声は作成します。
+Before playback, the app converts the current sentence and the next sentence into WAV files. These temporary audio files are created even when document and history saving is off.
 
-音声はアプリの一時領域に保存します。不要になった合成ファイルと、合成が失敗・キャンセルされたファイルは削除します。一時停止中は再開用に残すことがあります。通常終了時と次回起動時にも整理しますが、強制終了後は次回起動まで残る可能性があります。
+Audio is stored in the app's temporary directory. Unneeded synthesized files and files from failed or canceled synthesis are deleted. Files may be retained while paused so playback can resume. Cleanup also runs during normal app termination and at the next launch. After a forced termination, files may remain until the next launch.
 
-## ロック画面とコピー
+## Lock Screen and clipboard
 
-iOS のロック画面やコントロールセンターには、初期設定では `SimpleTTS` と読書位置を表示します。「ロック画面に文書名を表示」をオンにした場合だけ、実際のファイル名を表示します。本文の抜粋は再生情報に含めません。
+By default, the iOS Lock Screen and Control Center display `SimpleTTS` and the reading position. The actual file name is displayed only when **Show Document Name on Lock Screen** is on. Playback information never includes a text excerpt.
 
-再生情報は、Siri やジャーナルなどの提案に使用しないよう OS に指定します。再生情報の表示先には、AirPlay の接続先や対応アクセサリが含まれることがあります。これは [Apple の Now Playing 機能](https://developer.apple.com/documentation/mediaplayer/mpnowplayinginfocenter)による表示です。
+The app asks the operating system to exclude playback information from suggestions such as Siri and Journal. Playback information may also appear on AirPlay destinations and supported accessories through [Apple's Now Playing feature](https://developer.apple.com/documentation/mediaplayer/mpnowplayinginfocenter).
 
-「コピー」を押すと、表示中の文を OS のクリップボードへ書き込みます。ほかのアプリへの貼り付けや、設定に応じたユニバーサルクリップボードでの共有が可能になります。
+**Copy Sentence** writes the displayed sentence to the system clipboard. It can then be pasted into other apps or shared through Universal Clipboard, depending on your settings.
 
-## バックアップ
+## Backups
 
-本文・履歴・退避ファイルの保存フォルダは、OS にバックアップ対象外として指定します。過去のバージョンで作成した保存フォルダにも、起動時に同じ指定を適用します。一時音声は OS の一時領域に保存します。
+The folder containing document text, history, and recovery files is marked as excluded from operating system backups. At launch, the same exclusion is applied to storage created by earlier versions. Temporary audio is stored in the operating system's temporary directory.
 
-この指定は、すでに作成済みの iCloud バックアップや端末のバックアップから情報を取り除く操作ではありません。独自のバックアップソフトや手動コピーも削除対象外です。詳しくは [Apple のバックアップ除外の説明](https://developer.apple.com/documentation/foundation/optimizing-your-app-s-data-for-icloud-backup)を参照してください。
+This setting does not remove information from existing iCloud or device backups. It also does not delete copies made manually or by other backup software. See [Apple's backup exclusion documentation](https://developer.apple.com/documentation/foundation/optimizing-your-app-s-data-for-icloud-backup) for details.
 
 ## Privacy Manifest
 
-`PrivacyInfo.xcprivacy` には、トラッキングと開発者によるデータ収集を行わないことを記載しています。利用理由の申告が必要な API については、アプリ自身の設定の読み書きに `CA92.1`、利用者が選んだファイルの種類・サイズの確認に `3B52.1` を申告しています。[Apple の利用理由一覧](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacyaccessedapitypes/nsprivacyaccessedapitype)
+`PrivacyInfo.xcprivacy` declares that the app does not track users or collect data for the developer. For APIs that require a reason declaration, it uses `CA92.1` to read and write the app's own preferences and `3B52.1` to inspect the type and size of files selected by the user. See [Apple's approved API reasons](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacyaccessedapitypes/nsprivacyaccessedapitype).

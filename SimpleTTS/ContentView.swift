@@ -64,7 +64,7 @@ struct ContentView: View {
             .disabled(model.isBusy)
             .overlay {
                 if model.isLoading {
-                    ProgressView("読み込み中…")
+                    ProgressView("Loading…")
                         .padding()
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
                 }
@@ -77,7 +77,7 @@ struct ContentView: View {
                 case .success(let url):
                     Task { await model.openFile(at: url) }
                 case .failure(let error):
-                    model.errorMessage = "ファイルを開けませんでした: \(error.localizedDescription)"
+                    model.errorMessage = "Could not open the file: \(error.localizedDescription)"
                 }
             }
             .dropDestination(for: URL.self) { urls, _ in
@@ -86,7 +86,7 @@ struct ContentView: View {
                 return true
             }
             .alert(
-                "エラー",
+                "Error",
                 isPresented: Binding(
                     get: { model.errorMessage != nil },
                     set: { if !$0 { model.errorMessage = nil } }
@@ -104,11 +104,11 @@ struct ContentView: View {
             .sheet(isPresented: $isPrivacyPresented) {
                 NavigationStack {
                     PrivacySettingsView(model: model)
-                        .navigationTitle("プライバシー")
+                        .navigationTitle("Privacy")
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
                             ToolbarItem(placement: .confirmationAction) {
-                                Button("完了") { isPrivacyPresented = false }
+                                Button("Done") { isPrivacyPresented = false }
                                     .disabled(model.isClearingData)
                             }
                         }
@@ -128,9 +128,9 @@ struct ContentView: View {
         Button {
             model.isImporterPresented = true
         } label: {
-            Label("開く", systemImage: "folder")
+            Label("Open…", systemImage: "folder")
         }
-        .help("テキストファイルを開く（⌘O）")
+        .help("Open a text file (⌘O)")
     }
 
     #if os(iOS)
@@ -144,7 +144,7 @@ struct ContentView: View {
                 // セーブを読み込んだら読み上げ画面に戻る
                 preferredCompactColumn = .detail
             }
-            .navigationTitle("セーブ")
+            .navigationTitle("Saved Positions")
         } detail: {
             ReaderView(model: model)
                 .navigationTitle(model.document?.title ?? "SimpleTTS")
@@ -156,7 +156,7 @@ struct ContentView: View {
                         Button {
                             isPrivacyPresented = true
                         } label: {
-                            Label("プライバシー", systemImage: "hand.raised")
+                            Label("Privacy", systemImage: "hand.raised")
                         }
                     }
                 }
@@ -207,7 +207,7 @@ struct ContentView: View {
             }
             ToolbarItem(placement: .secondaryAction) {
                 SettingsLink {
-                    Label("プライバシー設定", systemImage: "hand.raised")
+                    Label("Privacy Settings", systemImage: "hand.raised")
                 }
             }
         }
@@ -257,16 +257,16 @@ private struct SpeechToolbarControls: View {
                 Button {
                     isPopoverPresented.toggle()
                 } label: {
-                    Label("読み上げ設定", systemImage: "slider.horizontal.3")
+                    Label("Speech Settings", systemImage: "slider.horizontal.3")
                 }
-                .help("声と読み上げ速度（現在: \(model.selectedVoiceName ?? "システム既定の声")、\(rateText)）")
+                .help("Voice and speed (currently \(model.selectedVoiceName ?? "System Default"), \(rateText))")
                 .popover(isPresented: $isPopoverPresented, arrowEdge: .bottom) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("声")
+                        Text("Voice")
                             .font(.headline)
                         voicePicker
                             .labelsHidden()
-                        Text("速度")
+                        Text("Speed")
                             .font(.headline)
                         rateControl
                     }
@@ -291,15 +291,15 @@ private struct SpeechToolbarControls: View {
     }
 
     private var voicePicker: some View {
-        Picker("声", selection: $model.selectedVoice) {
-            Text("システム既定の声").tag(String?.none)
+        Picker("Voice", selection: $model.selectedVoice) {
+            Text("System Default").tag(String?.none)
             Divider()
             ForEach(model.voices) { voice in
-                Text("\(voice.name)（\(voice.locale)）").tag(Optional(voice.id))
+                Text("\(voice.name) (\(voice.locale))").tag(Optional(voice.id))
             }
         }
         .frame(width: 220)
-        .help("読み上げに使う声")
+        .help("Voice used for speech")
     }
 
     private var rateControl: some View {
@@ -307,14 +307,14 @@ private struct SpeechToolbarControls: View {
             Image(systemName: "tortoise")
             Slider(value: $model.rate, in: ReaderModel.rateRange, step: ReaderModel.rateStep)
                 .frame(width: 120)
-                .accessibilityLabel("読み上げ速度")
+                .accessibilityLabel("Speech speed")
                 .accessibilityValue(rateText)
             Image(systemName: "hare")
             Text(rateText)
                 .monospacedDigit()
                 .frame(width: 40, alignment: .trailing)
         }
-        .help("読み上げ速度（声の標準の速さに対する倍率、\(rateText(ReaderModel.rateRange.lowerBound))〜\(rateText(ReaderModel.rateRange.upperBound))）")
+        .help("Speech speed relative to the voice's normal rate (\(rateText(ReaderModel.rateRange.lowerBound))–\(rateText(ReaderModel.rateRange.upperBound)))")
     }
 
     private var rateText: String {
@@ -326,7 +326,27 @@ private struct SpeechToolbarControls: View {
     }
 }
 
-#Preview {
-    ContentView(model: ReaderModel())
-        .frame(width: 900, height: 600)
+#Preview("Reader") {
+    // Keep preview content and preferences separate from the user's library.
+    let model: ReaderModel = {
+        let root = FileManager.default.temporaryDirectory.appending(path: "SimpleTTS-ReaderPreview")
+        let storage = Storage(baseURL: root.appending(path: "Storage"))
+        let text = "Welcome to SimpleTTS. Open a text file to read it aloud. You can move between sentences and adjust the playback speed."
+        let document = ReaderDocument(title: "Welcome.txt", text: text)
+        try? storage.storeDocumentText(text, id: document.id)
+        try? storage.writeSaves([
+            SavePoint(id: UUID(), kind: .auto, documentID: document.id, documentTitle: document.title,
+                      sentenceIndex: 0, sentenceCount: document.sentences.count,
+                      excerpt: document.sentences[0], createdAt: Date())
+        ])
+        let defaults = UserDefaults(suiteName: "SimpleTTS.ReaderPreview")!
+        defaults.set(true, forKey: "retainsDocuments")
+        return ReaderModel(storage: storage,
+                           speaker: SpeechPlayer(temporaryDirectory: root.appending(path: "Audio")),
+                           defaults: defaults, loadsVoices: false)
+    }()
+    ContentView(model: model)
+        #if os(macOS)
+        .frame(width: 1000, height: 600)
+        #endif
 }

@@ -1,4 +1,4 @@
-# start.sh のビルド成果物
+# Build products from start.sh
 /build/
 # Created by https://www.toptal.com/developers/gitignore/api/macos
 # Edit at https://www.toptal.com/developers/gitignore?templates=macos
@@ -42,13 +42,13 @@ Temporary Items
 local/
 tmp/
 
-# Xcode の個人設定とビルド成果物
+# Personal Xcode settings and build products
 xcuserdata/
 *.xcuserstate
 DerivedData/
 .build/
 
-# ローカルの署名設定と認証情報
+# Local signing settings and credentials
 /Config/Signing.local.xcconfig
 .env
 .env.*

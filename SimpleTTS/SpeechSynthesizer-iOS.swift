@@ -15,16 +15,16 @@ nonisolated enum SpeechSynthesisError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .voiceUnavailable:
-            return "選択した声がこの端末にありません。設定アプリの「アクセシビリティ」>「読み上げコンテンツ」>「声」で追加するか、別の声を選んでください。"
+            return "The selected voice is not available on this device. Download it in Settings under Accessibility, or choose another voice."
         case .timedOut:
-            return "音声の合成が応答しなくなりました。"
+            return "Speech synthesis stopped responding."
         case let .conversionFailed(underlying):
             if let underlying {
-                return "合成した音声を変換できませんでした: \(underlying.localizedDescription)"
+                return "Could not convert the generated audio: \(underlying.localizedDescription)"
             }
-            return "合成した音声を変換できませんでした。"
+            return "Could not convert the generated audio."
         case let .unwritableOutput(underlying):
-            return "合成した音声を保存できませんでした: \(underlying.localizedDescription)"
+            return "Could not save the generated audio: \(underlying.localizedDescription)"
         }
     }
 }
@@ -66,8 +66,8 @@ nonisolated enum SpeechSynthesizer {
     /// 同じ名前の声が品質違いで複数入っていることがあるので、品質を名前に添える。
     private static func displayName(of voice: AVSpeechSynthesisVoice) -> String {
         switch voice.quality {
-        case .premium: "\(voice.name) プレミアム"
-        case .enhanced: "\(voice.name) 拡張"
+        case .premium: "\(voice.name) Premium"
+        case .enhanced: "\(voice.name) Enhanced"
         default: voice.name
         }
     }

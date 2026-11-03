@@ -8,36 +8,36 @@ struct PrivacySettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("文書と履歴を保存", isOn: $model.retainsDocuments)
+                Toggle("Save Documents and History", isOn: $model.retainsDocuments)
             } header: {
-                Text("保存")
+                Text("Storage")
             } footer: {
-                Text("オンのときは、開いた文書の全文と、文書名・本文の抜粋・読み上げ位置・日時を保存します。オフにしても、以前の保存データは残ります。保存せずに開いた文書を保存するには、オンにして開き直してください。")
+                Text("When enabled, the app saves the full text, document name, an excerpt, reading position, and date. Turning this off keeps existing saved data. To save a document opened with saving disabled, enable this setting and reopen it.")
             }
 
             #if os(iOS)
             Section {
-                Toggle("ロック画面に文書名を表示", isOn: $model.showsDocumentNameOnLockScreen)
+                Toggle("Show Document Name on Lock Screen", isOn: $model.showsDocumentNameOnLockScreen)
             } header: {
-                Text("再生情報")
+                Text("Now Playing")
             } footer: {
-                Text("オフのときは「SimpleTTS」と表示します。オンにすると、コントロールセンターや接続先の機器にも文書名が表示されることがあります。")
+                Text("When disabled, the title is shown as “SimpleTTS.” When enabled, the document name may also appear in Control Center and on connected devices.")
             }
             #endif
 
             Section {
-                Text("保存する設定にかかわらず、読み上げ中は一時的な音声ファイルを作ります。通常終了時と次回起動時に削除します。")
-                Text("本文と履歴は端末内に保存し、アプリからサーバーへ送信しません。保存先は OS のバックアップ対象から除外します。")
+                Text("Playback creates temporary audio files even when saving is disabled. These files are removed on normal exit and at the next launch.")
+                Text("Documents and history stay on your device. The app does not upload them to a server, and excludes its storage folder from system backups.")
             } header: {
-                Text("データの取り扱い")
+                Text("Data Use")
             }
 
             Section {
-                Button("保存データをすべて削除…", role: .destructive) {
+                Button("Delete All Saved Data…", role: .destructive) {
                     confirmsDeletion = true
                 }
                 if model.isClearingData {
-                    ProgressView("削除中…")
+                    ProgressView("Deleting…")
                 }
                 if let message = model.dataDeletionMessage {
                     Text(message).foregroundStyle(.secondary)
@@ -46,25 +46,25 @@ struct PrivacySettingsView: View {
                     Text(error).foregroundStyle(.red)
                 }
             } header: {
-                Text("削除")
+                Text("Delete Data")
             } footer: {
-                Text("本文・履歴・復旧用の退避データ・生成音声を削除し、開いている文書を閉じます。元ファイル、コピー済みのクリップボード、既存のバックアップは削除しません。")
+                Text("Closes the current document and deletes stored documents, history, recovery copies, and generated audio. Original files, clipboard contents, and existing backups are not deleted.")
             }
         }
         .formStyle(.grouped)
         .disabled(model.isBusy)
-        .confirmationDialog("保存データをすべて削除しますか？", isPresented: $confirmsDeletion, titleVisibility: .visible) {
-            Button("すべて削除", role: .destructive) {
+        .confirmationDialog("Delete all saved data?", isPresented: $confirmsDeletion, titleVisibility: .visible) {
+            Button("Delete All", role: .destructive) {
                 Task { await model.deleteAllStoredData() }
             }
-            Button("キャンセル", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("読み上げを停止し、アプリに保存した文書と履歴、生成音声を削除します。この操作は取り消せません。元ファイルとアプリの設定は残ります。")
+            Text("Playback will stop, and all documents, history, and generated audio stored by the app will be deleted. This cannot be undone. Original files and app settings will be kept.")
         }
     }
 }
 
-#Preview("プライバシー") {
+#Preview("Privacy") {
     let root = FileManager.default.temporaryDirectory.appending(path: "SimpleTTS-PrivacyPreview")
     let model = ReaderModel(
         storage: Storage(baseURL: root.appending(path: "Storage")),

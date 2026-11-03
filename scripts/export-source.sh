@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# コミット済みのソースだけを配布用 ZIP にする。作業フォルダ全体は圧縮しない。
+# Export committed source files to a ZIP without archiving the working directory.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -11,16 +11,16 @@ if [[ $# -gt 1 || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 fi
 
 if [[ -n "$(git -C "$ROOT_DIR" status --porcelain)" ]]; then
-  echo "未コミットの変更があります。公開する変更をコミットしてから実行してください。" >&2
+  echo "There are uncommitted changes. Commit the changes you want to publish before exporting." >&2
   exit 1
 fi
 
 OUTPUT="${1:-$ROOT_DIR/build/SimpleTTS-source.zip}"
 if [[ "$OUTPUT" != /* ]]; then OUTPUT="$PWD/$OUTPUT"; fi
 if [[ -e "$OUTPUT" || -L "$OUTPUT" ]]; then
-  echo "出力先がすでに存在します: $OUTPUT" >&2
+  echo "Output already exists: $OUTPUT" >&2
   exit 1
 fi
 mkdir -p "$(dirname "$OUTPUT")"
 git -C "$ROOT_DIR" archive --format=zip --prefix=SimpleTTS/ --output="$OUTPUT" HEAD
-echo "作成しました: $OUTPUT"
+echo "Created: $OUTPUT"

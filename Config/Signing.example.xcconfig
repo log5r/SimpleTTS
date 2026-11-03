@@ -1,4 +1,4 @@
-// Signing.local.xcconfig にコピーしてから、自分の値へ変更してください。
-// ローカル設定は Git の管理対象外です。秘密鍵やパスワードは記入しないでください。
+// Copy this file to Signing.local.xcconfig, then replace the values with your own.
+// Local settings are ignored by Git. Do not put private keys or passwords here.
 DEVELOPMENT_TEAM = YOUR_TEAM_ID
 PRODUCT_BUNDLE_IDENTIFIER = com.example.SimpleTTS

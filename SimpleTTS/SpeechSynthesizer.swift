@@ -52,12 +52,12 @@ nonisolated enum SpeechSynthesisError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case let .commandFailed(status):
-            return "say コマンドが異常終了しました（終了コード \(status)）。音声の設定を確認してください。"
+            return "The say command failed (exit code \(status)). Check your voice settings."
         case let .unreadableOutput(underlying):
             if let underlying {
-                return "合成した音声ファイルを読み込めませんでした: \(underlying.localizedDescription)"
+                return "Could not read the generated audio file: \(underlying.localizedDescription)"
             }
-            return "合成した音声ファイルを読み込めませんでした。"
+            return "Could not read the generated audio file."
         }
     }
 }

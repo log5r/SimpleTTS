@@ -9,9 +9,9 @@ struct SavesSidebar: View {
 
     var body: some View {
         List {
-            Section("オートセーブ") {
+            Section("Automatic") {
                 if model.autoSaves.isEmpty {
-                    placeholder("一時停止するとここに保存されます")
+                    placeholder("Your position is saved here when you pause.")
                 } else {
                     ForEach(model.autoSaves) { save in
                         row(for: save)
@@ -19,9 +19,9 @@ struct SavesSidebar: View {
                 }
             }
 
-            Section("セーブ（\(model.manualSaves.count)/\(ReaderModel.manualSaveLimit)）") {
+            Section("Saved Positions (\(model.manualSaves.count)/\(ReaderModel.manualSaveLimit))") {
                 if model.manualSaves.isEmpty {
-                    placeholder("一時停止中に「この位置をセーブ」で追加できます")
+                    placeholder("Choose Save Position while paused to add one.")
                 } else {
                     ForEach(model.manualSaves) { save in
                         row(for: save)
@@ -32,19 +32,19 @@ struct SavesSidebar: View {
         .listStyle(.sidebar)
         // 一覧全体に付ける。行ごとに付けると、iOS ではスワイプ操作から開いたときに表示されない
         .confirmationDialog(
-            "このセーブを削除しますか？",
+            "Delete this saved position?",
             isPresented: Binding(
                 get: { pendingDeletion != nil },
                 set: { if !$0 { pendingDeletion = nil } }
             ),
             presenting: pendingDeletion
         ) { save in
-            Button("削除", role: .destructive) {
+            Button("Delete", role: .destructive) {
                 model.delete(save)
                 pendingDeletion = nil
             }
         } message: { save in
-            Text("「\(save.documentTitle)」\(save.sentenceIndex + 1)文目")
+            Text("“\(save.documentTitle)” — sentence \(save.sentenceIndex + 1)")
         }
     }
 
@@ -57,7 +57,7 @@ struct SavesSidebar: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("この位置を読み込む")
+            .help("Go to this saved position")
 
             #if os(macOS)
             Button {
@@ -67,7 +67,7 @@ struct SavesSidebar: View {
             }
             .buttonStyle(.borderless)
             .foregroundStyle(.secondary)
-            .help("削除")
+            .help("Delete")
             #endif
         }
         #if os(iOS)
@@ -76,14 +76,14 @@ struct SavesSidebar: View {
             Button(role: .destructive) {
                 pendingDeletion = save
             } label: {
-                Label("削除", systemImage: "trash")
+                Label("Delete", systemImage: "trash")
             }
         }
         #endif
         .contextMenu {
-            Button("この位置を読み込む") { load(save) }
+            Button("Go to Saved Position") { load(save) }
             Divider()
-            Button("削除…", role: .destructive) { pendingDeletion = save }
+            Button("Delete…", role: .destructive) { pendingDeletion = save }
         }
     }
 
@@ -121,7 +121,8 @@ private struct SaveRow: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
             HStack {
-                Text("\(save.sentenceIndex + 1) / \(save.sentenceCount)文目")
+                Text("\(save.sentenceIndex + 1) / \(save.sentenceCount)")
+                    .accessibilityLabel("Sentence \(save.sentenceIndex + 1) of \(save.sentenceCount)")
                     .monospacedDigit()
                 Spacer()
                 Text(save.createdAt, format: .dateTime.year().month().day().hour().minute())

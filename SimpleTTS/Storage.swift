@@ -15,11 +15,11 @@ nonisolated enum StorageError: LocalizedError {
         case let .savesUnreadable(underlying, _):
             return underlying.localizedDescription
         case .writeBlocked:
-            return "読み込めなかったセーブデータを保護するため、セーブの書き込みを停止しています。"
+            return "Saving is disabled to protect saved data that could not be read."
         case .invalidDocumentID:
-            return "文書の識別子が不正です。"
+            return "The document identifier is invalid."
         case .unsafeStorageDirectory:
-            return "保存先にリンクまたは通常のフォルダではない項目があるため、保存できません。"
+            return "Cannot save because the storage location is a link or is not a regular folder."
         }
     }
 }

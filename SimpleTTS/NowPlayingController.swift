@@ -49,7 +49,7 @@ final class NowPlayingController {
 
         center.nowPlayingInfo = [
             MPMediaItemPropertyTitle: state.title,
-            MPMediaItemPropertyArtist: "\(state.sentenceIndex + 1) / \(state.sentenceCount)文目",
+            MPMediaItemPropertyArtist: "Sentence \(state.sentenceIndex + 1) of \(state.sentenceCount)",
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
             MPNowPlayingInfoPropertyPlaybackRate: state.isPlaying ? 1.0 : 0.0,
             // 文書名の表示を許可した場合も、システムのコンテンツ提案には使わせない。
