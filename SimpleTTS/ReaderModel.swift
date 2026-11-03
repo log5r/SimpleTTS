@@ -1,6 +1,10 @@
-import AppKit
 import Foundation
 import Observation
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
 
 /// 前後の文脈として表示する文
 nonisolated struct ContextSentence: Identifiable, Hashable, Sendable {
@@ -27,11 +31,17 @@ final class ReaderModel {
         static let voice = "voiceName"
     }
 
-    private(set) var document: ReaderDocument?
-    private(set) var currentIndex = 0
-    private(set) var isPlaying = false
+    private(set) var document: ReaderDocument? {
+        didSet { playbackStateDidChange() }
+    }
+    private(set) var currentIndex = 0 {
+        didSet { playbackStateDidChange() }
+    }
+    private(set) var isPlaying = false {
+        didSet { playbackStateDidChange() }
+    }
     private(set) var saves: [SavePoint] = []
-    private(set) var voices: [SayVoice] = []
+    private(set) var voices: [SpeechVoice] = []
     private(set) var statusMessage: String?
     var errorMessage: String?
     var isImporterPresented = false
@@ -42,8 +52,19 @@ final class ReaderModel {
     @ObservationIgnored private let speaker = SpeechPlayer()
     @ObservationIgnored private let storage = Storage()
     @ObservationIgnored private var reachedEnd = false
+    #if os(iOS)
+    /// 電話などの割り込みで止めたか。割り込みが終わったら読み上げを再開するために使う。
+    @ObservationIgnored private var resumesAfterInterruption = false
+    @ObservationIgnored private lazy var nowPlaying = NowPlayingController(actions: .init(
+        play: { [weak self] in self?.play() },
+        pause: { [weak self] in self?.stop() },
+        togglePlayPause: { [weak self] in self?.togglePlayback() },
+        next: { [weak self] in self?.step(by: 1) },
+        previous: { [weak self] in self?.step(by: -1) }
+    ))
+    #endif
 
-    /// `say -v` に渡す音声名（nil ならシステム既定）。読み上げ中に変えると次の文から反映される。
+    /// 読み上げに使う声（`SpeechVoice.id`、nil ならシステム既定）。読み上げ中に変えると次の文から反映される。
     var selectedVoice: String? {
         get { storedVoice }
         set {
@@ -80,8 +101,14 @@ final class ReaderModel {
         }
         restoreLastSession()
 
+        #if os(iOS)
+        speaker.onAudioSessionEvent = { [weak self] event in
+            self?.handleAudioSessionEvent(event)
+        }
+        #endif
+
         Task { [weak self] in
-            let voices = await SayCommand.availableVoices()
+            let voices = await SpeechSynthesizer.availableVoices()
             self?.voices = voices
         }
     }
@@ -97,6 +124,12 @@ final class ReaderModel {
     }
 
     var sentenceCount: Int { document?.sentences.count ?? 0 }
+
+    /// 選んでいる声の表示名（nil ならシステム既定の声）
+    var selectedVoiceName: String? {
+        guard let selectedVoice else { return nil }
+        return voices.first { $0.id == selectedVoice }?.name ?? selectedVoice
+    }
 
     var currentSentence: String? {
         guard let document, document.sentences.indices.contains(currentIndex) else { return nil }
@@ -172,6 +205,10 @@ final class ReaderModel {
     // MARK: - Playback
 
     func togglePlayback() {
+        #if os(iOS)
+        // 利用者が操作したら、割り込み後の自動再開はしない
+        resumesAfterInterruption = false
+        #endif
         if isPlaying {
             stop()
         } else {
@@ -314,9 +351,13 @@ final class ReaderModel {
     /// フォーカス中（大写し）の文をクリップボードにコピーする（停止中のみ）。
     func copyCurrentSentence() {
         guard !isPlaying, let sentence = currentSentence else { return }
+        #if os(macOS)
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(sentence, forType: .string)
+        #else
+        UIPasteboard.general.string = sentence
+        #endif
         statusMessage = "フォーカス中の文章をコピーしました。"
     }
 
@@ -331,6 +372,57 @@ final class ReaderModel {
         speaker.removeTemporaryFiles()
         // 終了処理中はアラートを表示できないため、失敗は無視する
         try? autosave()
+    }
+
+    /// アプリがバックグラウンドに入るときに、読み上げは続けたまま現在の位置をオートセーブする。
+    /// iOS ではバックグラウンドのアプリが終了通知なしに終了させられることがあるため。
+    func saveProgress() {
+        guard document != nil else { return }
+        try? autosave()
+    }
+
+    #if os(iOS)
+    /// 電話・他のアプリの再生・ヘッドフォンの取り外しなどで読み上げを止める（ヒューマンインターフェイスガイドラインの
+    /// 「割り込みが終わって再開してよいとシステムが示したら再開する」「出力先がなくなったら一時停止する」に従う）。
+    private func handleAudioSessionEvent(_ event: SpeechPlayer.AudioSessionEvent) {
+        switch event {
+        case .interruptionBegan:
+            guard isPlaying else { return }
+            resumesAfterInterruption = true
+            stop()
+        case let .interruptionEnded(shouldResume):
+            let resumes = resumesAfterInterruption && shouldResume
+            resumesAfterInterruption = false
+            if resumes {
+                play()
+            }
+        case .outputDeviceRemoved:
+            resumesAfterInterruption = false
+            stop()
+        case .mediaServicesReset:
+            // 読み上げ中の文は中断されているので、一時停止の状態にそろえる。再開は利用者に任せる
+            resumesAfterInterruption = false
+            stop()
+        }
+    }
+    #endif
+
+    /// 読み上げの状態が変わったら、ロック画面などの「再生中」表示を更新する。
+    private func playbackStateDidChange() {
+        #if os(iOS)
+        guard let document else {
+            nowPlaying.update(nil)
+            return
+        }
+        nowPlaying.update(.init(
+            title: document.title,
+            sentenceIndex: currentIndex,
+            sentenceCount: document.sentences.count,
+            isPlaying: isPlaying,
+            canStepBackward: canStepBackward,
+            canStepForward: canStepForward
+        ))
+        #endif
     }
 
     // MARK: - Private

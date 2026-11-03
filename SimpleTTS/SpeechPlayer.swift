@@ -1,12 +1,14 @@
 import AVFoundation
 import Foundation
 
-/// 文ごとに `say -o` でファイルへ合成し、1 本の `AVAudioEngine` で連続再生する。
+/// 文ごとにファイルへ合成し、1 本の `AVAudioEngine` で連続再生する。
+///
+/// 合成は `SpeechSynthesizer` が行う。macOS では `say -o`、iOS では `AVSpeechSynthesizer.write` を使う。
 ///
 /// - 合成は再生とは別に背景で行い、次の文を先読み（`prefetch`）して文間の待ち時間を短くする。
 /// - 読み上げ中はエンジンを止めず、文と文の間も無音を流し続ける。出力デバイスの IO が文ごとに
 ///   止まったり起きたりしないので、デバイス側の立ち上がりで文頭が欠けることもない。
-/// - 停止・移動は短いフェードアウトのあとに止める（`say` を SIGTERM で切るとクリックになる）。
+/// - 停止・移動は短いフェードアウトのあとに止める（合成エンジンのライブ再生を途中で切るとクリックになる）。
 /// - 速度は `AVAudioUnitTimePitch` で音程を保ったまま変える。合成は常に声の標準の速さで行うので、
 ///   速度を変えても合成し直さず、読み上げ中の文にもすぐ反映される。
 ///
@@ -23,9 +25,10 @@ final class SpeechPlayer {
     static let fadeOutDuration: TimeInterval = 0.032
     static let fadeOutSteps = 4
 
-    private let engine = AVAudioEngine()
-    private let player = AVAudioPlayerNode()
-    private let timePitch = AVAudioUnitTimePitch()
+    // iOS でメディアサービスがリセットされたら作り直すので var にしている
+    private var engine = AVAudioEngine()
+    private var player = AVAudioPlayerNode()
+    private var timePitch = AVAudioUnitTimePitch()
     private let format = AVAudioFormat(standardFormatWithSampleRate: SpeechSynthesizer.sampleRate, channels: 1)!
     private var areNodesAttached = false
 
@@ -51,6 +54,24 @@ final class SpeechPlayer {
     private var pendingGap: Gap = .leadIn
     private var configurationObserver: NSObjectProtocol?
 
+    #if os(iOS)
+    /// オーディオセッションの割り込み（電話など）や出力先の変化。読み上げを止めるかどうかは受け取り側が決める。
+    enum AudioSessionEvent {
+        /// 電話などの割り込みで、システムがオーディオセッションを無効にした
+        case interruptionBegan
+        /// システムが再開の可否を示した。`shouldResume` は再開してよいと示しているか
+        case interruptionEnded(shouldResume: Bool)
+        /// ヘッドフォンが外されるなど、使っていた出力先がなくなった
+        case outputDeviceRemoved
+        /// メディアサービスがリセットされた。読み上げ中の文は中断され、エンジンは作り直してある
+        case mediaServicesReset
+    }
+
+    /// オーディオセッションのイベント。メインスレッドで呼ばれる。
+    var onAudioSessionEvent: ((AudioSessionEvent) -> Void)?
+    private var sessionObservers: [NSObjectProtocol] = []
+    #endif
+
     private enum Gap {
         /// エンジン起動直後。出力デバイスが起き上がる時間なので、速度によらず実時間で確保する。
         case leadIn
@@ -68,8 +89,10 @@ final class SpeechPlayer {
     }
 
     init() {
+        #if os(macOS)
         // 終了済みの say の stdin に書き込んでもアプリが落ちないようにする
         signal(SIGPIPE, SIG_IGN)
+        #endif
 
         let base = FileManager.default.temporaryDirectory
         cacheDirectory = base.appending(
@@ -78,6 +101,16 @@ final class SpeechPlayer {
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
         applyPlaybackRate()
 
+        observeEngineConfiguration()
+        #if os(iOS)
+        observeAudioSession()
+        #endif
+    }
+
+    private func observeEngineConfiguration() {
+        if let configurationObserver {
+            NotificationCenter.default.removeObserver(configurationObserver)
+        }
         configurationObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
         ) { [weak self] _ in
@@ -91,6 +124,11 @@ final class SpeechPlayer {
         if let configurationObserver {
             NotificationCenter.default.removeObserver(configurationObserver)
         }
+        #if os(iOS)
+        for observer in sessionObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        #endif
     }
 
     // MARK: - Public
@@ -111,7 +149,7 @@ final class SpeechPlayer {
         discardSynthesisTasks(except: [request])
 
         Task { [weak self] in
-            let result: Result<URL, Error>
+            var result: Result<URL, Error>
             do {
                 result = .success(try await synthesis.value)
             } catch {
@@ -123,6 +161,17 @@ final class SpeechPlayer {
                 await fadeOut.value
             }
             guard self.generation == token, var utterance = self.current, utterance.token == token else { return }
+            #if os(iOS)
+            if case .success = result, !self.engine.isRunning {
+                do {
+                    try await self.activateAudioSession()
+                } catch {
+                    result = .failure(error)
+                }
+                // 有効になるのを待つあいだに停止・移動されていたら流さない
+                guard self.generation == token, self.current?.token == token else { return }
+            }
+            #endif
             switch result {
             case let .success(url):
                 utterance.fileURL = url
@@ -306,6 +355,11 @@ final class SpeechPlayer {
         player.stop()
         engine.stop()
         pendingGap = .leadIn
+        #if os(iOS)
+        // 止めたことを他のアプリに知らせ、一時停止していた音楽などを再開できるようにする。
+        // 同期版の setActive(false) はメインスレッドを止めることがあるので、非同期版を使う
+        AVAudioSession.sharedInstance().deactivate(options: .notifyOthersOnDeactivation) { _, _ in }
+        #endif
     }
 
     private func applyPlaybackRate() {
@@ -341,6 +395,86 @@ final class SpeechPlayer {
         engine.stop()
         play(utterance)
     }
+
+    #if os(iOS)
+    // MARK: - Audio session
+
+    /// 読み上げ用にオーディオセッションを設定して有効にする。
+    /// `.playback` なので消音スイッチがオンでも鳴り、バックグラウンドでも読み上げを続けられる
+    /// （Info.plist の `UIBackgroundModes` に `audio` が必要）。`.spokenAudio` は読み上げコンテンツ向けのモードで、
+    /// 他のアプリの読み上げと重なったときにシステムが適切に扱う。
+    /// 有効化には時間がかかり、同期版の setActive(true) はメインスレッドを止めることがあるので、非同期版を使う。
+    private func activateAudioSession() async throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playback, mode: .spokenAudio)
+        try await session.activate(options: [])
+    }
+
+    private func observeAudioSession() {
+        let center = NotificationCenter.default
+        let session = AVAudioSession.sharedInstance()
+        // システムによる無効化だけを割り込みとして扱う。自分で `setActive(false)` したときにも届くので、それは無視する。
+        sessionObservers.append(center.addObserver(
+            forName: AVAudioSession.didBecomeInactiveNotification, object: session, queue: .main
+        ) { [weak self] notification in
+            let context = notification.userInfo?[AVAudioSession.deactivationContextKey]
+                as? AVAudioSession.DeactivationContext
+            let isSystemDeactivation = context?.source == .system
+            MainActor.assumeIsolated {
+                guard let self, isSystemDeactivation else { return }
+                self.onAudioSessionEvent?(.interruptionBegan)
+            }
+        })
+        sessionObservers.append(center.addObserver(
+            forName: AVAudioSession.resumptionRecommendationNotification, object: session, queue: .main
+        ) { [weak self] notification in
+            let context = notification.userInfo?[AVAudioSession.resumptionContextKey]
+                as? AVAudioSession.ResumptionContext
+            let shouldResume = context?.recommendation == .shouldResume
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.onAudioSessionEvent?(.interruptionEnded(shouldResume: shouldResume))
+            }
+        })
+        sessionObservers.append(center.addObserver(
+            forName: AVAudioSession.routeChangeNotification, object: session, queue: .main
+        ) { [weak self] notification in
+            let reasonValue = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+            let isDeviceRemoved = reasonValue.flatMap(AVAudioSession.RouteChangeReason.init) == .oldDeviceUnavailable
+            MainActor.assumeIsolated {
+                guard let self, isDeviceRemoved else { return }
+                self.onAudioSessionEvent?(.outputDeviceRemoved)
+            }
+        })
+        sessionObservers.append(center.addObserver(
+            forName: AVAudioSession.mediaServicesWereResetNotification, object: session, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.mediaServicesWereReset()
+            }
+        })
+    }
+
+    /// メディアサービスのリセット後は、それまでのエンジンとノードは使えない。読み上げ中の文を捨て、作り直す。
+    /// 合成済みのファイルはそのまま使えるので残す。セッションの設定は次の `activateAudioSession()` でやり直される。
+    private func mediaServicesWereReset() {
+        current = nil
+        generation &+= 1
+        playbackAttempt &+= 1
+        fadeOut?.cancel()
+        fadeOut = nil
+
+        engine = AVAudioEngine()
+        player = AVAudioPlayerNode()
+        timePitch = AVAudioUnitTimePitch()
+        areNodesAttached = false
+        pendingGap = .leadIn
+        applyPlaybackRate()
+        observeEngineConfiguration()
+
+        onAudioSessionEvent?(.mediaServicesReset)
+    }
+    #endif
 
     // MARK: - Cache directory
 

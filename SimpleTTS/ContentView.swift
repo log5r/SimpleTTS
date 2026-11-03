@@ -55,6 +55,84 @@ private nonisolated struct ToolbarWidthClass: Equatable {
 struct ContentView: View {
     @Bindable var model: ReaderModel
     @State private var columnVisibility = NavigationSplitViewVisibility.automatic
+
+    var body: some View {
+        splitView
+            .fileImporter(
+                isPresented: $model.isImporterPresented,
+                allowedContentTypes: [.plainText]
+            ) { result in
+                switch result {
+                case .success(let url):
+                    model.openFile(at: url)
+                case .failure(let error):
+                    model.errorMessage = "ファイルを開けませんでした: \(error.localizedDescription)"
+                }
+            }
+            .dropDestination(for: URL.self) { urls, _ in
+                guard let url = urls.first else { return false }
+                model.openFile(at: url)
+                return true
+            }
+            .alert(
+                "エラー",
+                isPresented: Binding(
+                    get: { model.errorMessage != nil },
+                    set: { if !$0 { model.errorMessage = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(model.errorMessage ?? "")
+            }
+            #if os(macOS)
+            .onDisappear {
+                model.prepareForTermination()
+            }
+            #else
+            .onChange(of: scenePhase) { _, phase in
+                // バックグラウンドでは読み上げを続けるが、終了させられても再開できるよう位置を保存しておく
+                if phase == .background {
+                    model.saveProgress()
+                }
+            }
+            #endif
+    }
+
+    private var openButton: some View {
+        Button {
+            model.isImporterPresented = true
+        } label: {
+            Label("開く", systemImage: "folder")
+        }
+        .help("テキストファイルを開く（⌘O）")
+    }
+
+    #if os(iOS)
+    @Environment(\.scenePhase) private var scenePhase
+    /// iPhone など幅の狭い環境で表示するカラム。最初は読み上げ画面を出し、セーブ一覧は戻るボタンで開く。
+    @State private var preferredCompactColumn = NavigationSplitViewColumn.detail
+
+    private var splitView: some View {
+        NavigationSplitView(columnVisibility: $columnVisibility, preferredCompactColumn: $preferredCompactColumn) {
+            SavesSidebar(model: model) {
+                // セーブを読み込んだら読み上げ画面に戻る
+                preferredCompactColumn = .detail
+            }
+            .navigationTitle("セーブ")
+        } detail: {
+            ReaderView(model: model)
+                .navigationTitle(model.document?.title ?? "SimpleTTS")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItemGroup(placement: .primaryAction) {
+                        openButton
+                        SpeechToolbarControls(model: model, isCompact: true)
+                    }
+                }
+        }
+    }
+    #else
     @State private var toolbarWidthClass = ToolbarWidthClass(detailWidth: LayoutMetrics.windowDefaultWidth)
     /// 詳細カラムが狭く、ツールバーの「声」「速度」を 1 つのボタンにまとめて表示しているか
     @State private var isToolbarCompact = false
@@ -64,7 +142,7 @@ struct ContentView: View {
         columnVisibility != .detailOnly
     }
 
-    var body: some View {
+    private var splitView: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SavesSidebar(model: model)
                 .navigationSplitViewColumnWidth(
@@ -91,47 +169,12 @@ struct ContentView: View {
         .navigationTitle(model.document?.title ?? "SimpleTTS")
         .toolbar {
             ToolbarItem(placement: .navigation) {
-                Button {
-                    model.isImporterPresented = true
-                } label: {
-                    Label("開く", systemImage: "folder")
-                }
-                .help("テキストファイルを開く（⌘O）")
+                openButton
             }
 
             ToolbarItem(placement: .primaryAction) {
                 SpeechToolbarControls(model: model, isCompact: isToolbarCompact)
             }
-        }
-        .fileImporter(
-            isPresented: $model.isImporterPresented,
-            allowedContentTypes: [.plainText]
-        ) { result in
-            switch result {
-            case .success(let url):
-                model.openFile(at: url)
-            case .failure(let error):
-                model.errorMessage = "ファイルを開けませんでした: \(error.localizedDescription)"
-            }
-        }
-        .dropDestination(for: URL.self) { urls, _ in
-            guard let url = urls.first else { return false }
-            model.openFile(at: url)
-            return true
-        }
-        .alert(
-            "エラー",
-            isPresented: Binding(
-                get: { model.errorMessage != nil },
-                set: { if !$0 { model.errorMessage = nil } }
-            )
-        ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(model.errorMessage ?? "")
-        }
-        .onDisappear {
-            model.prepareForTermination()
         }
     }
 
@@ -147,8 +190,10 @@ struct ContentView: View {
             }
         }
     }
+    #endif
 }
 
+#if os(macOS)
 /// 最後の呼び出しから一定時間たってから処理を 1 回だけ実行する
 private final class Debouncer {
     private var pending: DispatchWorkItem?
@@ -160,10 +205,12 @@ private final class Debouncer {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 }
+#endif
 
 /// ツールバーの「声」と「速度」。
 /// 詳細カラムが狭いときは 1 つのボタンにまとめ、押すとポップオーバーで同じ操作を出す。
 /// 並べたままだと macOS がツールバーの「»」メニューに押し出し、スライダーを操作できなくなる。
+/// iOS ではツールバーに並べる幅がないので、常にまとめて表示する。
 private struct SpeechToolbarControls: View {
     @Bindable var model: ReaderModel
     let isCompact: Bool
@@ -177,7 +224,7 @@ private struct SpeechToolbarControls: View {
                 } label: {
                     Label("読み上げ設定", systemImage: "slider.horizontal.3")
                 }
-                .help("声と読み上げ速度（現在: \(model.selectedVoice ?? "システム既定の声")、\(rateText)）")
+                .help("声と読み上げ速度（現在: \(model.selectedVoiceName ?? "システム既定の声")、\(rateText)）")
                 .popover(isPresented: $isPopoverPresented, arrowEdge: .bottom) {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("声")
@@ -189,6 +236,10 @@ private struct SpeechToolbarControls: View {
                         rateControl
                     }
                     .padding(16)
+                    #if os(iOS)
+                    // 項目が少ないので、iPhone でもシートにせずポップオーバーのまま出す
+                    .presentationCompactAdaptation(.popover)
+                    #endif
                 }
             } else {
                 HStack(spacing: 12) {
@@ -209,11 +260,11 @@ private struct SpeechToolbarControls: View {
             Text("システム既定の声").tag(String?.none)
             Divider()
             ForEach(model.voices) { voice in
-                Text("\(voice.name)（\(voice.locale)）").tag(Optional(voice.name))
+                Text("\(voice.name)（\(voice.locale)）").tag(Optional(voice.id))
             }
         }
         .frame(width: 220)
-        .help("読み上げに使う声（say -v）")
+        .help("読み上げに使う声")
     }
 
     private var rateControl: some View {

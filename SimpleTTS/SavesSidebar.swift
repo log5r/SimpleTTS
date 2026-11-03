@@ -3,6 +3,8 @@ import SwiftUI
 /// オートセーブと任意セーブの一覧。クリックでその位置を読み込む。
 struct SavesSidebar: View {
     let model: ReaderModel
+    /// セーブを読み込んだあとに呼ばれる（iPhone で読み上げ画面に戻るため）
+    var onLoad: () -> Void = {}
     @State private var pendingDeletion: SavePoint?
 
     var body: some View {
@@ -28,6 +30,7 @@ struct SavesSidebar: View {
             }
         }
         .listStyle(.sidebar)
+        // 一覧全体に付ける。行ごとに付けると、iOS ではスワイプ操作から開いたときに表示されない
         .confirmationDialog(
             "このセーブを削除しますか？",
             isPresented: Binding(
@@ -48,7 +51,7 @@ struct SavesSidebar: View {
     private func row(for save: SavePoint) -> some View {
         HStack(alignment: .top, spacing: 6) {
             Button {
-                model.load(save)
+                load(save)
             } label: {
                 SaveRow(save: save, isCurrentDocument: model.document?.id == save.documentID)
                     .contentShape(Rectangle())
@@ -56,6 +59,7 @@ struct SavesSidebar: View {
             .buttonStyle(.plain)
             .help("この位置を読み込む")
 
+            #if os(macOS)
             Button {
                 pendingDeletion = save
             } label: {
@@ -64,12 +68,28 @@ struct SavesSidebar: View {
             .buttonStyle(.borderless)
             .foregroundStyle(.secondary)
             .help("削除")
+            #endif
         }
+        #if os(iOS)
+        // iOS では行のスワイプで削除する（削除は確認ダイアログを経る）
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) {
+                pendingDeletion = save
+            } label: {
+                Label("削除", systemImage: "trash")
+            }
+        }
+        #endif
         .contextMenu {
-            Button("この位置を読み込む") { model.load(save) }
+            Button("この位置を読み込む") { load(save) }
             Divider()
             Button("削除…", role: .destructive) { pendingDeletion = save }
         }
+    }
+
+    private func load(_ save: SavePoint) {
+        model.load(save)
+        onLoad()
     }
 
     private func placeholder(_ text: String) -> some View {

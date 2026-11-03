@@ -25,22 +25,28 @@ enum ReaderWidthClass: Equatable {
 struct ReaderView: View {
     let model: ReaderModel
 
+    /// 読み上げ画面の高さがこれ未満のときは、上下の余白を詰める（iPhone の横向きなど）。
+    /// 詰めないと見出し・大写しの文・操作列が収まらず、はみ出た分がナビゲーションバーやホームインジケータに重なる。
+    /// macOS はウィンドウの最小の高さ（`LayoutMetrics.readerMinHeight`）があるので該当しない。
+    static let shortHeightThreshold: CGFloat = 420
+
     var body: some View {
         if let document = model.document {
             // 文の長さに関係なく、詳細カラムに割り当てられたサイズでレイアウトする。
             GeometryReader { geometry in
                 let widthClass = ReaderWidthClass(width: geometry.size.width)
+                let isShort = geometry.size.height < Self.shortHeightThreshold
                 VStack(spacing: 0) {
-                    header(for: document, widthClass: widthClass)
+                    header(for: document, widthClass: widthClass, isShort: isShort)
                     Divider()
-                    VStack(spacing: widthClass == .regular ? 20 : 14) {
+                    VStack(spacing: isShort ? 6 : (widthClass == .regular ? 20 : 14)) {
                         ContextColumn(
                             sentences: model.previousContext,
                             currentIndex: model.currentIndex,
                             alignment: .bottom,
                             onSelect: { model.jump(to: $0) }
                         )
-                        currentSentence(widthClass: widthClass)
+                        currentSentence(widthClass: widthClass, isShort: isShort)
                             .layoutPriority(1)
                         ContextColumn(
                             sentences: model.nextContext,
@@ -50,10 +56,10 @@ struct ReaderView: View {
                         )
                     }
                     .padding(.horizontal, widthClass == .regular ? 32 : 16)
-                    .padding(.vertical, widthClass == .regular ? 20 : 14)
+                    .padding(.vertical, isShort ? 8 : (widthClass == .regular ? 20 : 14))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     Divider()
-                    ControlBar(model: model, widthClass: widthClass)
+                    ControlBar(model: model, widthClass: widthClass, isShort: isShort)
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
             }
@@ -61,7 +67,11 @@ struct ReaderView: View {
             ContentUnavailableView {
                 Label("テキストファイルを開いてください", systemImage: "doc.text")
             } description: {
+                #if os(macOS)
                 Text("⌘O、またはウィンドウへのドラッグ＆ドロップで .txt ファイルを開けます。")
+                #else
+                Text("「ファイルを開く」から .txt ファイルを選んでください。")
+                #endif
             } actions: {
                 Button("ファイルを開く…") {
                     model.isImporterPresented = true
@@ -70,7 +80,7 @@ struct ReaderView: View {
         }
     }
 
-    private func header(for document: ReaderDocument, widthClass: ReaderWidthClass) -> some View {
+    private func header(for document: ReaderDocument, widthClass: ReaderWidthClass, isShort: Bool) -> some View {
         VStack(spacing: 6) {
             HStack(spacing: 8) {
                 Image(systemName: "doc.text")
@@ -100,20 +110,20 @@ struct ReaderView: View {
             ProgressView(value: Double(model.currentIndex + 1), total: Double(max(model.sentenceCount, 1)))
         }
         .padding(.horizontal)
-        .padding(.vertical, 10)
+        .padding(.vertical, isShort ? 6 : 10)
     }
 
-    private func currentSentence(widthClass: ReaderWidthClass) -> some View {
+    private func currentSentence(widthClass: ReaderWidthClass, isShort: Bool) -> some View {
         Group {
             if model.isPlaying {
-                currentSentenceText(widthClass: widthClass)
+                currentSentenceText(widthClass: widthClass, isShort: isShort)
             } else {
                 // 一時停止中は大写しの文を選択してコピーできる
-                currentSentenceText(widthClass: widthClass)
+                currentSentenceText(widthClass: widthClass, isShort: isShort)
                     .textSelection(.enabled)
             }
         }
-        .padding(widthClass == .regular ? 24 : 16)
+        .padding(isShort ? 12 : (widthClass == .regular ? 24 : 16))
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 16)
@@ -125,12 +135,12 @@ struct ReaderView: View {
         )
     }
 
-    private func currentSentenceText(widthClass: ReaderWidthClass) -> some View {
+    private func currentSentenceText(widthClass: ReaderWidthClass, isShort: Bool) -> some View {
         Text(model.currentSentence ?? "")
             .font(.system(size: widthClass == .regular ? 34 : 28, weight: .semibold))
             .multilineTextAlignment(.center)
             .minimumScaleFactor(0.4)
-            .frame(maxWidth: .infinity, minHeight: 80)
+            .frame(maxWidth: .infinity, minHeight: isShort ? 44 : 80)
     }
 }
 
@@ -188,9 +198,10 @@ private struct ContextColumn: View {
 private struct ControlBar: View {
     let model: ReaderModel
     let widthClass: ReaderWidthClass
+    let isShort: Bool
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: isShort ? 4 : 8) {
             HStack(spacing: widthClass == .regular ? 12 : 8) {
                 Group {
                     Button {
@@ -262,6 +273,6 @@ private struct ControlBar: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal)
-        .padding(.vertical, 12)
+        .padding(.vertical, isShort ? 6 : 12)
     }
 }

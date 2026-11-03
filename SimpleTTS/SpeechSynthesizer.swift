@@ -1,20 +1,14 @@
+#if os(macOS)
 import AVFoundation
 import Foundation
-
-/// `say -v ?` で取得できる音声
-nonisolated struct SayVoice: Identifiable, Hashable, Sendable {
-    let name: String
-    let locale: String
-    var id: String { name }
-}
 
 /// macOS 標準コマンド `/usr/bin/say` に関するユーティリティ
 nonisolated enum SayCommand {
     static let executableURL = URL(fileURLWithPath: "/usr/bin/say")
 
     /// インストール済みの音声一覧を取得する（日本語音声を先頭に並べる）。
-    static func availableVoices() async -> [SayVoice] {
-        await Task.detached(priority: .utility) { () -> [SayVoice] in
+    static func availableVoices() async -> [SpeechVoice] {
+        await Task.detached(priority: .utility) { () -> [SpeechVoice] in
             let process = Process()
             process.executableURL = SayCommand.executableURL
             process.arguments = ["-v", "?"]
@@ -33,8 +27,8 @@ nonisolated enum SayCommand {
     }
 
     /// `say -v ?` の出力（例: `Kyoko               ja_JP    # こんにちは…`）を解析する。
-    static func parseVoiceList(_ output: String) -> [SayVoice] {
-        var voices: [SayVoice] = []
+    static func parseVoiceList(_ output: String) -> [SpeechVoice] {
+        var voices: [SpeechVoice] = []
         var seen = Set<String>()
         for line in output.split(whereSeparator: \.isNewline) {
             let head = line.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
@@ -42,22 +36,11 @@ nonisolated enum SayCommand {
             guard tokens.count >= 2, let locale = tokens.last else { continue }
             let name = tokens.dropLast().joined(separator: " ")
             guard !name.isEmpty, seen.insert(name).inserted else { continue }
-            voices.append(SayVoice(name: name, locale: String(locale)))
+            // `say -v` には音声名を渡すので、名前をそのまま ID にする
+            voices.append(SpeechVoice(id: name, name: name, locale: String(locale)))
         }
-        return voices.sorted { lhs, rhs in
-            let lhsRank = lhs.locale.hasPrefix("ja") ? 0 : 1
-            let rhsRank = rhs.locale.hasPrefix("ja") ? 0 : 1
-            if lhsRank != rhsRank { return lhsRank < rhsRank }
-            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-        }
+        return SpeechVoice.sortedForDisplay(voices)
     }
-}
-
-/// 1 文の合成条件。合成済みファイルのキャッシュのキーにも使う。
-nonisolated struct SpeechRequest: Hashable, Sendable {
-    let text: String
-    /// `say -v` に渡す音声名（nil または空ならシステム既定の声）
-    let voice: String?
 }
 
 nonisolated enum SpeechSynthesisError: LocalizedError {
@@ -91,6 +74,11 @@ nonisolated enum SpeechSynthesisError: LocalizedError {
 nonisolated enum SpeechSynthesizer {
     /// 合成するサンプルレート。`SpeechPlayer` の再生フォーマットと一致させる。
     static let sampleRate: Double = 48000
+
+    /// 選べる声の一覧（日本語の声が先頭）
+    static func availableVoices() async -> [SpeechVoice] {
+        await SayCommand.availableVoices()
+    }
 
     /// `request` を `url` に 48 kHz / Float32 / モノラルの WAV として合成する。
     /// タスクがキャンセルされたら `say` を終了し、`CancellationError` を投げる。
@@ -198,3 +186,4 @@ private nonisolated final class ProcessLauncher: @unchecked Sendable {
         }
     }
 }
+#endif
