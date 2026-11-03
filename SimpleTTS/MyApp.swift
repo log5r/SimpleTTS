@@ -23,6 +23,10 @@ import UIKit
         .windowResizability(.contentMinSize)
         .defaultSize(width: LayoutMetrics.windowDefaultWidth, height: LayoutMetrics.windowDefaultHeight)
         .commands { fileCommands }
+        Settings {
+            PrivacySettingsView(model: model)
+                .frame(width: 500)
+        }
         #else
         WindowGroup {
             ContentView(model: model)
@@ -42,6 +46,7 @@ import UIKit
                 model.isImporterPresented = true
             }
             .keyboardShortcut("o", modifiers: [.command])
+            .disabled(model.isBusy)
         }
     }
 }

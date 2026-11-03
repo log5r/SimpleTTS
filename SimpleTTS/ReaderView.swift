@@ -108,6 +108,11 @@ struct ReaderView: View {
                     .fixedSize()
             }
             ProgressView(value: Double(model.currentIndex + 1), total: Double(max(model.sentenceCount, 1)))
+            if !model.savesCurrentDocument {
+                Label("この文書の本文・履歴は保存しません", systemImage: "eye.slash")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(.horizontal)
         .padding(.vertical, isShort ? 6 : 10)

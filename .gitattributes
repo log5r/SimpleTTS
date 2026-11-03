@@ -1,0 +1,18 @@
+# git archive に個人設定やローカル成果物を含めない。
+**/xcuserdata export-ignore
+**/xcuserdata/** export-ignore
+*.xcuserstate export-ignore
+/build export-ignore
+/.renga export-ignore
+/tmp export-ignore
+/local export-ignore
+/DerivedData export-ignore
+/.build export-ignore
+/Config/Signing.local.xcconfig export-ignore
+.env* export-ignore
+*.p12 export-ignore
+*.p8 export-ignore
+*.pem export-ignore
+*.key export-ignore
+*.mobileprovision export-ignore
+*.provisionprofile export-ignore

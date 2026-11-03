@@ -42,3 +42,21 @@ Temporary Items
 local/
 tmp/
 
+# Xcode の個人設定とビルド成果物
+xcuserdata/
+*.xcuserstate
+DerivedData/
+.build/
+
+# ローカルの署名設定と認証情報
+/Config/Signing.local.xcconfig
+.env
+.env.*
+!.env.example
+*.p12
+*.p8
+*.pem
+*.key
+*.mobileprovision
+*.provisionprofile
+

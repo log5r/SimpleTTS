@@ -39,6 +39,9 @@ final class SpeechPlayer {
 
     /// 合成済み（または合成中）のファイル。現在の文と先読みした次の文だけを保持する。
     private var synthesisTasks: [SpeechRequest: Task<URL, Error>] = [:]
+    /// キャッシュから外したあとも、合成の終了とファイル削除を待っている処理。
+    private var retiringSynthesisTasks: [UUID: Task<Void, Never>] = [:]
+    private var temporaryFilesCleanup: Task<Void, Error>?
     private let cacheDirectory: URL
 
     /// 再生中（合成待ちを含む）の文
@@ -88,13 +91,13 @@ final class SpeechPlayer {
         let onFinish: (Result<Void, Error>) -> Void
     }
 
-    init() {
+    init(temporaryDirectory: URL = FileManager.default.temporaryDirectory) {
         #if os(macOS)
         // 終了済みの say の stdin に書き込んでもアプリが落ちないようにする
         signal(SIGPIPE, SIG_IGN)
         #endif
 
-        let base = FileManager.default.temporaryDirectory
+        let base = temporaryDirectory
         cacheDirectory = base.appending(
             path: "Speech-\(ProcessInfo.processInfo.processIdentifier)", directoryHint: .isDirectory)
         Self.removeStaleCacheDirectories(in: base, keeping: cacheDirectory)
@@ -139,6 +142,10 @@ final class SpeechPlayer {
         voice: String?,
         onFinish: @escaping (Result<Void, Error>) -> Void
     ) {
+        guard temporaryFilesCleanup == nil else {
+            onFinish(.failure(CancellationError()))
+            return
+        }
         interruptCurrent()
         generation &+= 1
         let token = generation
@@ -187,6 +194,7 @@ final class SpeechPlayer {
 
     /// 次に読む見込みの文を先に合成しておく。
     func prefetch(_ text: String, voice: String?) {
+        guard temporaryFilesCleanup == nil else { return }
         let request = SpeechRequest(text: text, voice: voice)
         _ = synthesisTask(for: request)
         var keep: Set<SpeechRequest> = [request]
@@ -218,6 +226,46 @@ final class SpeechPlayer {
         try? FileManager.default.removeItem(at: cacheDirectory)
     }
 
+    /// 明示的なデータ消去。合成が終わるまで待ち、消去後に古い音声が書き戻されるのを防ぐ。
+    /// 終了時と異なり、削除に失敗した場合は呼び出し側へ通知する。
+    func clearTemporaryFiles() async throws {
+        if let temporaryFilesCleanup {
+            try await temporaryFilesCleanup.value
+            return
+        }
+        let cleanup = Task { @MainActor in
+            stop()
+            let activeTasks = Array(synthesisTasks.values)
+            synthesisTasks.removeAll()
+            for task in activeTasks {
+                task.cancel()
+            }
+            // 先読みの差し替えなどで既に辞書から外れた合成も、ファイルを書き終えるまで待つ。
+            let retiringTasks = Array(retiringSynthesisTasks.values)
+            for task in activeTasks {
+                _ = await task.result
+            }
+            for task in retiringTasks {
+                await task.value
+            }
+            if let fadeOut {
+                await fadeOut.value
+            }
+            stopEngineIfIdle()
+
+            let fileManager = FileManager.default
+            let base = cacheDirectory.deletingLastPathComponent()
+            let directories = try Self.cacheDirectories(in: base)
+            for directory in directories {
+                try fileManager.removeItem(at: directory)
+            }
+            try fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        }
+        temporaryFilesCleanup = cleanup
+        defer { temporaryFilesCleanup = nil }
+        try await cleanup.value
+    }
+
     // MARK: - Synthesis cache
 
     private func synthesisTask(for request: SpeechRequest) -> Task<URL, Error> {
@@ -226,6 +274,9 @@ final class SpeechPlayer {
         }
         let url = cacheDirectory.appending(path: "\(UUID().uuidString).wav", directoryHint: .notDirectory)
         let task = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            // ウィンドウを閉じた後も同じプレイヤーを使う場合、終了処理が消した保存先を作り直す。
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try await SpeechSynthesizer.synthesize(request, to: url)
             return url
         }
@@ -244,11 +295,17 @@ final class SpeechPlayer {
         for (request, task) in synthesisTasks where !keep.contains(request) {
             synthesisTasks.removeValue(forKey: request)
             task.cancel()
-            Task.detached(priority: .utility) {
+            let identifier = UUID()
+            let cleanup = Task.detached(priority: .utility) {
                 // 合成済みなら URL が返るので削除する。キャンセル・失敗時は synthesize 側が削除している。
                 if let url = try? await task.value {
                     try? FileManager.default.removeItem(at: url)
                 }
+            }
+            retiringSynthesisTasks[identifier] = cleanup
+            Task { [weak self] in
+                await cleanup.value
+                self?.retiringSynthesisTasks.removeValue(forKey: identifier)
             }
         }
     }
@@ -481,9 +538,18 @@ final class SpeechPlayer {
     /// 以前の起動（異常終了など）が残した一時ディレクトリを削除する。
     private static func removeStaleCacheDirectories(in base: URL, keeping current: URL) {
         let fileManager = FileManager.default
-        guard let items = try? fileManager.contentsOfDirectory(at: base, includingPropertiesForKeys: nil) else { return }
-        for item in items where item.lastPathComponent.hasPrefix("Speech-") && item != current {
+        guard let items = try? cacheDirectories(in: base) else { return }
+        for item in items where item != current {
             try? fileManager.removeItem(at: item)
+        }
+    }
+
+    private static func cacheDirectories(in base: URL) throws -> [URL] {
+        try FileManager.default.contentsOfDirectory(at: base, includingPropertiesForKeys: nil).filter {
+            let name = $0.lastPathComponent
+            guard name.hasPrefix("Speech-") else { return false }
+            let identifier = name.dropFirst("Speech-".count)
+            return !identifier.isEmpty && identifier.allSatisfy(\.isNumber)
         }
     }
 }

@@ -29,6 +29,8 @@ final class ReaderModel {
         /// 速度の倍率。以前は `say -r` の語/分を "speechRate" に保存していたが、意味が違うので別のキーにする。
         static let rate = "speechRateMultiplier"
         static let voice = "voiceName"
+        static let retainsDocuments = "retainsDocuments"
+        static let showsDocumentNameOnLockScreen = "showsDocumentNameOnLockScreen"
     }
 
     private(set) var document: ReaderDocument? {
@@ -43,14 +45,27 @@ final class ReaderModel {
     private(set) var saves: [SavePoint] = []
     private(set) var voices: [SpeechVoice] = []
     private(set) var statusMessage: String?
+    private(set) var isLoading = false {
+        didSet { playbackStateDidChange() }
+    }
+    private(set) var isClearingData = false {
+        didSet { playbackStateDidChange() }
+    }
+    private(set) var dataDeletionMessage: String?
+    private(set) var dataDeletionError: String?
     var errorMessage: String?
     var isImporterPresented = false
 
     private var storedVoice: String?
     private var storedRate: Double
+    private var storedRetainsDocuments: Bool
+    private var storedShowsDocumentNameOnLockScreen: Bool
+    private var currentDocumentIsStored = false
 
-    @ObservationIgnored private let speaker = SpeechPlayer()
-    @ObservationIgnored private let storage = Storage()
+    @ObservationIgnored private let speaker: SpeechPlayer
+    @ObservationIgnored private let storage: Storage
+    @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private var lifecycleGeneration = 0
     @ObservationIgnored private var reachedEnd = false
     #if os(iOS)
     /// 電話などの割り込みで止めたか。割り込みが終わったら読み上げを再開するために使う。
@@ -69,7 +84,7 @@ final class ReaderModel {
         get { storedVoice }
         set {
             storedVoice = newValue
-            UserDefaults.standard.set(newValue, forKey: DefaultsKey.voice)
+            defaults.set(newValue, forKey: DefaultsKey.voice)
             prefetchNextSentence()
         }
     }
@@ -79,16 +94,39 @@ final class ReaderModel {
         get { storedRate }
         set {
             storedRate = Self.normalizedRate(newValue)
-            UserDefaults.standard.set(storedRate, forKey: DefaultsKey.rate)
+            defaults.set(storedRate, forKey: DefaultsKey.rate)
             speaker.playbackRate = Float(storedRate)
         }
     }
 
-    init() {
-        let defaults = UserDefaults.standard
+    /// オフにすると、新しい本文と読み上げ位置を保存しない。既存データは明示的な削除まで保持する。
+    var retainsDocuments: Bool {
+        get { storedRetainsDocuments }
+        set {
+            storedRetainsDocuments = newValue
+            defaults.set(newValue, forKey: DefaultsKey.retainsDocuments)
+        }
+    }
+
+    var showsDocumentNameOnLockScreen: Bool {
+        get { storedShowsDocumentNameOnLockScreen }
+        set {
+            storedShowsDocumentNameOnLockScreen = newValue
+            defaults.set(newValue, forKey: DefaultsKey.showsDocumentNameOnLockScreen)
+            playbackStateDidChange()
+        }
+    }
+
+    init(storage: Storage = Storage(), speaker: SpeechPlayer = SpeechPlayer(),
+         defaults: UserDefaults = .standard, loadsVoices: Bool = true) {
+        self.storage = storage
+        self.speaker = speaker
+        self.defaults = defaults
         storedVoice = defaults.string(forKey: DefaultsKey.voice)
         let savedRate = defaults.double(forKey: DefaultsKey.rate)
         storedRate = savedRate > 0 ? Self.normalizedRate(savedRate) : 1
+        storedRetainsDocuments = defaults.object(forKey: DefaultsKey.retainsDocuments) as? Bool ?? true
+        storedShowsDocumentNameOnLockScreen = defaults.bool(forKey: DefaultsKey.showsDocumentNameOnLockScreen)
         speaker.playbackRate = Float(storedRate)
 
         do {
@@ -99,7 +137,7 @@ final class ReaderModel {
             saves = []
             errorMessage = Self.loadFailureMessage(for: error)
         }
-        restoreLastSession()
+        if retainsDocuments { restoreLastSession() }
 
         #if os(iOS)
         speaker.onAudioSessionEvent = { [weak self] event in
@@ -107,9 +145,11 @@ final class ReaderModel {
         }
         #endif
 
-        Task { [weak self] in
-            let voices = await SpeechSynthesizer.availableVoices()
-            self?.voices = voices
+        if loadsVoices {
+            Task { [weak self] in
+                let voices = await SpeechSynthesizer.availableVoices()
+                self?.voices = voices
+            }
         }
     }
 
@@ -148,52 +188,56 @@ final class ReaderModel {
         return (currentIndex + 1..<upper).map { ContextSentence(id: $0, text: document.sentences[$0]) }
     }
 
-    var canStepBackward: Bool { document != nil && currentIndex > 0 }
-    var canStepForward: Bool { currentIndex + 1 < sentenceCount }
+    var isBusy: Bool { isLoading || isClearingData }
+    var savesCurrentDocument: Bool { retainsDocuments && currentDocumentIsStored }
+    var canStepBackward: Bool { !isBusy && document != nil && currentIndex > 0 }
+    var canStepForward: Bool { !isBusy && currentIndex + 1 < sentenceCount }
     /// 任意セーブは停止中のみ
-    var canSaveManually: Bool { document != nil && !isPlaying }
+    var canSaveManually: Bool { !isBusy && document != nil && !isPlaying && savesCurrentDocument }
     /// コピーは停止（一時停止）中のみ
-    var canCopy: Bool { currentSentence != nil && !isPlaying }
+    var canCopy: Bool { !isBusy && currentSentence != nil && !isPlaying }
 
     // MARK: - File
 
-    func openFile(at url: URL) {
-        let accessing = url.startAccessingSecurityScopedResource()
-        defer {
-            if accessing { url.stopAccessingSecurityScopedResource() }
-        }
-
+    func openFile(at url: URL) async {
+        guard !isBusy else { return }
+        isLoading = true
+        defer { isLoading = false }
+        let generation = lifecycleGeneration
         let text: String
+        let newDocument: ReaderDocument
         do {
-            let data = try Data(contentsOf: url)
-            guard let decoded = TextDecoding.decode(data) else {
-                errorMessage = "「\(url.lastPathComponent)」の文字コードを判別できませんでした。"
-                return
-            }
-            text = decoded
+            (text, newDocument) = try await Task.detached(priority: .userInitiated) {
+                let text = try TextFileLoader.read(from: url)
+                return (text, ReaderDocument(title: url.lastPathComponent, text: text))
+            }.value
         } catch {
-            errorMessage = "ファイルを読み込めませんでした: \(error.localizedDescription)"
+            if generation == lifecycleGeneration {
+                errorMessage = "ファイルを読み込めませんでした: \(error.localizedDescription)"
+            }
             return
         }
-
-        let newDocument = ReaderDocument(title: url.lastPathComponent, text: text)
+        guard generation == lifecycleGeneration else { return }
         guard !newDocument.sentences.isEmpty else {
             errorMessage = "「\(url.lastPathComponent)」には読み上げる文章がありません。"
             return
         }
 
-        do {
-            try storage.storeDocumentText(text, id: newDocument.id)
-        } catch {
-            errorMessage = "本文の保存に失敗しました。セーブから再開できない可能性があります: \(error.localizedDescription)"
-        }
-
         // 読み上げ中なら止めて、それまでの文書の位置をオートセーブする
         stop()
 
+        currentDocumentIsStored = false
+        if retainsDocuments {
+            do {
+                try storage.storeDocumentText(text, id: newDocument.id)
+                currentDocumentIsStored = true
+            } catch {
+                errorMessage = "本文を保存できなかったため、この文書の履歴は保存しません: \(error.localizedDescription)"
+            }
+        }
         document = newDocument
         reachedEnd = false
-        if let autosave = autoSaves.first(where: { $0.documentID == newDocument.id }) {
+        if retainsDocuments, let autosave = autoSaves.first(where: { $0.documentID == newDocument.id }) {
             currentIndex = clampedIndex(autosave.sentenceIndex, in: newDocument)
             statusMessage = "前回停止した位置（\(currentIndex + 1)文目）から再開できます。"
         } else {
@@ -217,7 +261,7 @@ final class ReaderModel {
     }
 
     func play() {
-        guard let document, !document.sentences.isEmpty, !isPlaying else { return }
+        guard !isBusy, let document, !document.sentences.isEmpty, !isPlaying else { return }
         if reachedEnd {
             currentIndex = 0
             reachedEnd = false
@@ -234,7 +278,8 @@ final class ReaderModel {
         isPlaying = false
         do {
             try autosave()
-            statusMessage = "一時停止しました（\(currentIndex + 1)文目）。位置をオートセーブしました。"
+            statusMessage = "一時停止しました（\(currentIndex + 1)文目）。"
+                + (savesCurrentDocument ? "位置をオートセーブしました。" : "履歴は保存しません。")
         } catch {
             statusMessage = "一時停止しました（\(currentIndex + 1)文目）。"
             reportError("一時停止しました（オートセーブに失敗）: \(error.localizedDescription)")
@@ -247,7 +292,7 @@ final class ReaderModel {
 
     /// 指定した文へ移動する。読み上げ中ならその文から読み直す。
     func jump(to index: Int) {
-        guard let document, document.sentences.indices.contains(index) else { return }
+        guard !isBusy, let document, document.sentences.indices.contains(index) else { return }
         reachedEnd = false
         currentIndex = index
         if isPlaying {
@@ -295,6 +340,7 @@ final class ReaderModel {
 
     /// オートセーブを試み、その結果をエラーメッセージの末尾に付ける文言で返す。
     private func autosaveResultSuffix() -> String {
+        guard savesCurrentDocument else { return "（履歴は保存しません）" }
         do {
             try autosave()
             return "（\(currentIndex + 1)文目をオートセーブしました）"
@@ -307,7 +353,7 @@ final class ReaderModel {
 
     /// 任意セーブ（停止中のみ）
     func saveManually() {
-        guard let document, !isPlaying else { return }
+        guard canSaveManually, let document else { return }
         guard manualSaves.count < Self.manualSaveLimit else {
             errorMessage = "セーブは最大\(Self.manualSaveLimit)件までです。不要なセーブを削除してください。"
             return
@@ -322,6 +368,7 @@ final class ReaderModel {
 
     /// セーブした位置を読み込む（再生ボタンでその位置から再開）。
     func load(_ save: SavePoint) {
+        guard !isBusy else { return }
         stop()
         guard let text = storage.loadDocumentText(id: save.documentID) else {
             reportError("「\(save.documentTitle)」の本文が見つかりません。ファイルを開き直してください。")
@@ -332,6 +379,7 @@ final class ReaderModel {
     }
 
     func delete(_ save: SavePoint) {
+        guard !isBusy else { return }
         do {
             try commitSaves(saves.filter { $0.id != save.id })
         } catch {
@@ -350,7 +398,7 @@ final class ReaderModel {
 
     /// フォーカス中（大写し）の文をクリップボードにコピーする（停止中のみ）。
     func copyCurrentSentence() {
-        guard !isPlaying, let sentence = currentSentence else { return }
+        guard canCopy, let sentence = currentSentence else { return }
         #if os(macOS)
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -363,8 +411,50 @@ final class ReaderModel {
 
     // MARK: - Lifecycle
 
+    /// 文書を閉じてから削除し、終了通知や合成完了通知によるデータの再生成を防ぐ。
+    func deleteAllStoredData() async {
+        guard !isBusy else { return }
+        isClearingData = true
+        defer { isClearingData = false }
+        dataDeletionMessage = nil
+        dataDeletionError = nil
+        errorMessage = nil
+        lifecycleGeneration &+= 1
+        #if os(iOS)
+        resumesAfterInterruption = false
+        #endif
+        isPlaying = false
+        document = nil
+        currentIndex = 0
+        currentDocumentIsStored = false
+        reachedEnd = false
+        statusMessage = nil
+
+        // 一方が失敗しても、もう一方の削除を試みる。
+        var failures: [String] = []
+        do {
+            try await speaker.clearTemporaryFiles()
+        } catch {
+            failures.append("生成音声: \(error.localizedDescription)")
+        }
+        do {
+            try storage.removeAllData()
+            saves = []
+        } catch {
+            failures.append("本文と履歴: \(error.localizedDescription)")
+            saves = (try? storage.loadSaves()) ?? []
+        }
+        if failures.isEmpty {
+            dataDeletionMessage = "保存データをすべて削除しました。"
+            statusMessage = dataDeletionMessage
+        } else {
+            dataDeletionError = "一部のデータを削除できませんでした。もう一度お試しください。\n" + failures.joined(separator: "\n")
+        }
+    }
+
     /// ウィンドウを閉じる・アプリ終了時に、読み上げを止めて位置をオートセーブする。
     func prepareForTermination() {
+        lifecycleGeneration &+= 1
         if isPlaying {
             speaker.stop()
             isPlaying = false
@@ -415,7 +505,7 @@ final class ReaderModel {
             return
         }
         nowPlaying.update(.init(
-            title: document.title,
+            title: showsDocumentNameOnLockScreen ? document.title : "SimpleTTS",
             sentenceIndex: currentIndex,
             sentenceCount: document.sentences.count,
             isPlaying: isPlaying,
@@ -438,6 +528,7 @@ final class ReaderModel {
         let restored = ReaderDocument(title: save.documentTitle, text: text)
         guard !restored.sentences.isEmpty else { return }
         document = restored
+        currentDocumentIsStored = true
         currentIndex = clampedIndex(save.sentenceIndex, in: restored)
         reachedEnd = false
     }
@@ -449,7 +540,7 @@ final class ReaderModel {
     /// 現在の文書の位置をオートセーブする（文書ごとに 1 件、上限を超えた古いものは削除）。
     /// 書き込みに失敗した場合はメモリ上のセーブ一覧も変更しない。
     private func autosave() throws {
-        guard let document else { return }
+        guard !isClearingData, savesCurrentDocument, let document else { return }
         var updated = saves.filter { !($0.kind == .auto && $0.documentID == document.id) }
         updated.append(makeSavePoint(kind: .auto, document: document))
 

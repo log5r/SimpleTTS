@@ -55,23 +55,34 @@ private nonisolated struct ToolbarWidthClass: Equatable {
 struct ContentView: View {
     @Bindable var model: ReaderModel
     @State private var columnVisibility = NavigationSplitViewVisibility.automatic
+    #if os(iOS)
+    @State private var isPrivacyPresented = false
+    #endif
 
     var body: some View {
         splitView
+            .disabled(model.isBusy)
+            .overlay {
+                if model.isLoading {
+                    ProgressView("読み込み中…")
+                        .padding()
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                }
+            }
             .fileImporter(
                 isPresented: $model.isImporterPresented,
                 allowedContentTypes: [.plainText]
             ) { result in
                 switch result {
                 case .success(let url):
-                    model.openFile(at: url)
+                    Task { await model.openFile(at: url) }
                 case .failure(let error):
                     model.errorMessage = "ファイルを開けませんでした: \(error.localizedDescription)"
                 }
             }
             .dropDestination(for: URL.self) { urls, _ in
-                guard let url = urls.first else { return false }
-                model.openFile(at: url)
+                guard !model.isBusy, let url = urls.first, url.isFileURL else { return false }
+                Task { await model.openFile(at: url) }
                 return true
             }
             .alert(
@@ -90,6 +101,20 @@ struct ContentView: View {
                 model.prepareForTermination()
             }
             #else
+            .sheet(isPresented: $isPrivacyPresented) {
+                NavigationStack {
+                    PrivacySettingsView(model: model)
+                        .navigationTitle("プライバシー")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("完了") { isPrivacyPresented = false }
+                                    .disabled(model.isClearingData)
+                            }
+                        }
+                }
+                .interactiveDismissDisabled(model.isClearingData)
+            }
             .onChange(of: scenePhase) { _, phase in
                 // バックグラウンドでは読み上げを続けるが、終了させられても再開できるよう位置を保存しておく
                 if phase == .background {
@@ -128,6 +153,11 @@ struct ContentView: View {
                     ToolbarItemGroup(placement: .primaryAction) {
                         openButton
                         SpeechToolbarControls(model: model, isCompact: true)
+                        Button {
+                            isPrivacyPresented = true
+                        } label: {
+                            Label("プライバシー", systemImage: "hand.raised")
+                        }
                     }
                 }
         }
@@ -174,6 +204,11 @@ struct ContentView: View {
 
             ToolbarItem(placement: .primaryAction) {
                 SpeechToolbarControls(model: model, isCompact: isToolbarCompact)
+            }
+            ToolbarItem(placement: .secondaryAction) {
+                SettingsLink {
+                    Label("プライバシー設定", systemImage: "hand.raised")
+                }
             }
         }
     }

@@ -32,24 +32,28 @@ final class NowPlayingController {
 
     /// 表示を更新する。文書がないときは nil を渡して表示を消す。
     func update(_ state: State?) {
-        guard state != lastState else { return }
+        guard state != lastState || state == nil else { return }
         lastState = state
         let center = MPNowPlayingInfoCenter.default()
+        let commands = MPRemoteCommandCenter.shared()
+        commands.playCommand.isEnabled = state != nil
+        commands.pauseCommand.isEnabled = state?.isPlaying == true
+        commands.togglePlayPauseCommand.isEnabled = state != nil
+        commands.previousTrackCommand.isEnabled = state?.canStepBackward == true
+        commands.nextTrackCommand.isEnabled = state?.canStepForward == true
         guard let state else {
             center.nowPlayingInfo = nil
             return
         }
         configureCommandsIfNeeded()
 
-        let commands = MPRemoteCommandCenter.shared()
-        commands.previousTrackCommand.isEnabled = state.canStepBackward
-        commands.nextTrackCommand.isEnabled = state.canStepForward
-
         center.nowPlayingInfo = [
             MPMediaItemPropertyTitle: state.title,
             MPMediaItemPropertyArtist: "\(state.sentenceIndex + 1) / \(state.sentenceCount)文目",
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
             MPNowPlayingInfoPropertyPlaybackRate: state.isPlaying ? 1.0 : 0.0,
+            // 文書名の表示を許可した場合も、システムのコンテンツ提案には使わせない。
+            MPNowPlayingInfoPropertyExcludeFromSuggestions: true,
         ]
     }
 

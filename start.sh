@@ -7,6 +7,7 @@
 # 環境変数:
 #   CONFIGURATION=Release   ビルド構成（既定: Debug）
 #   NO_SIGN=1               コード署名なしでビルド（署名用の Apple アカウントがない環境向け）
+# Config/Signing.local.xcconfig があれば、署名と Bundle ID のローカル設定を読み込む。
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -48,6 +49,9 @@ XCODEBUILD_ARGS=(
   -destination "platform=macOS"
   -derivedDataPath "$DERIVED_DATA"
 )
+if [[ -f "$ROOT_DIR/Config/Signing.local.xcconfig" ]]; then
+  XCODEBUILD_ARGS+=(-xcconfig "$ROOT_DIR/Config/Signing.local.xcconfig")
+fi
 if [[ "${NO_SIGN:-0}" == "1" ]]; then
   XCODEBUILD_ARGS+=(CODE_SIGNING_ALLOWED=NO)
 fi
