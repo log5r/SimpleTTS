@@ -6,6 +6,8 @@ A text-to-speech app for macOS, iPhone, and iPad. It uses system voices and supp
 
 The current project targets macOS 27.0.1 or later and iOS / iPadOS 27.0 or later. Development uses Xcode 27.2. There are no third-party Swift package dependencies.
 
+The app icon is `SimpleTTS/AppIcon.icon`. Open it in Icon Composer to edit the separate speech bubble and waveform SVG layers, Liquid Glass material, and appearance variants. The shared macOS and iOS target uses `AppIcon` as its app icon source; Xcode compiles the layered icon when building the app.
+
 ## Run on macOS
 
 Open `SimpleTTS.xcodeproj` in Xcode, select the `SimpleTTS` scheme and `My Mac`, then run the app. You can also launch it from Terminal:

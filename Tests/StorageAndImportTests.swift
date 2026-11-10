@@ -56,6 +56,10 @@ struct StorageAndImportTests {
         try reject(unsupported, matching: .unsupportedFileType)
         try Data([0, 1, 2, 3]).write(to: plain)
         try reject(plain, matching: .invalidText)
+        try Data("kill -9 \0<\0PID\0>\0 を使う。".utf8).write(to: plain)
+        try require(TextFileLoader.read(from: plain) == "kill -9 <PID> を使う。", "Embedded NUL was not removed")
+        try Data("A\0B\u{1B}C".utf8).write(to: plain)
+        try reject(plain, matching: .invalidText)
 
         try Data(repeating: 65, count: TextFileLoader.maximumByteCount).write(to: plain)
         try require(TextFileLoader.read(from: plain).utf8.count == TextFileLoader.maximumByteCount, "Limit-sized file rejected")

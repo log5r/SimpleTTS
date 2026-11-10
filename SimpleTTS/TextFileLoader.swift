@@ -79,10 +79,21 @@ nonisolated enum TextFileLoader {
             data.append(contentsOf: buffer.prefix(bytesRead))
         }
 
-        guard let text = TextDecoding.decode(data), !text.unicodeScalars.contains(where: isBinaryControl) else {
+        guard let decoded = TextDecoding.decode(data) else { throw TextFileError.invalidText }
+        // 他のツールが出力したテキストには、プレースホルダーの区切りなどとして NUL が紛れ込むことがある。
+        // NUL は表示も読み上げもしないので取り除く。バイナリファイルは NUL 以外の制御文字も含むため、下の検査で拒否される。
+        let text = removingNUL(from: decoded)
+        guard !text.unicodeScalars.contains(where: isBinaryControl) else {
             throw TextFileError.invalidText
         }
         return text
+    }
+
+    private static func removingNUL(from text: String) -> String {
+        guard text.unicodeScalars.contains("\0") else { return text }
+        var scalars = String.UnicodeScalarView()
+        scalars.append(contentsOf: text.unicodeScalars.lazy.filter { $0 != "\0" })
+        return String(scalars)
     }
 
     private static func isBinaryControl(_ scalar: Unicode.Scalar) -> Bool {
