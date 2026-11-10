@@ -190,6 +190,8 @@ final class ReaderModel {
 
     var isBusy: Bool { isLoading || isClearingData }
     var savesCurrentDocument: Bool { retainsDocuments && currentDocumentIsStored }
+    /// 再生／一時停止は文書を開いているときのみ（読み込み中・削除中は不可）
+    var canTogglePlayback: Bool { !isBusy && document != nil }
     var canStepBackward: Bool { !isBusy && document != nil && currentIndex > 0 }
     var canStepForward: Bool { !isBusy && currentIndex + 1 < sentenceCount }
     /// 任意セーブは停止中のみ

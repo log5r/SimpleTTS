@@ -561,12 +561,22 @@
         }
       }
     },
-    "Next sentence (⌘→)": {
+    "Next Sentence": {
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "次の文へ（⌘→）"
+            "value": "次の文"
+          }
+        }
+      }
+    },
+    "Next sentence (→ or ⌘→)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "次の文へ（→ または ⌘→）"
           }
         }
       }
@@ -721,6 +731,16 @@
         }
       }
     },
+    "Playback": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再生"
+          }
+        }
+      }
+    },
     "Playback creates temporary audio files even when saving is disabled. These files are removed on normal exit and at the next launch.": {
       "localizations": {
         "ja": {
@@ -771,12 +791,22 @@
         }
       }
     },
-    "Previous sentence (⌘←)": {
+    "Previous Sentence": {
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "前の文へ（⌘←）"
+            "value": "前の文"
+          }
+        }
+      }
+    },
+    "Previous sentence (← or ⌘←)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前の文へ（← または ⌘←）"
           }
         }
       }

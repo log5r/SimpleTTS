@@ -199,7 +199,8 @@ private struct ContextColumn: View {
     }
 }
 
-/// 再生／一時停止・前後移動・セーブ・コピーの操作列
+/// 再生／一時停止・前後移動・セーブ・コピーの操作列。
+/// キーボードショートカットは「再生」メニュー（`PlaybackCommands`）に割り当てている。
 private struct ControlBar: View {
     let model: ReaderModel
     let widthClass: ReaderWidthClass
@@ -215,8 +216,9 @@ private struct ControlBar: View {
                         Label("Previous", systemImage: "backward.end.fill")
                     }
                     .disabled(!model.canStepBackward)
+                    // ← は「再生」メニューに割り当てている。従来の ⌘← も使えるよう残す
                     .keyboardShortcut(.leftArrow, modifiers: [.command])
-                    .help("Previous sentence (⌘←)")
+                    .help("Previous sentence (← or ⌘←)")
 
                     Button {
                         model.togglePlayback()
@@ -230,7 +232,6 @@ private struct ControlBar: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .keyboardShortcut(.space, modifiers: [])
                     .help(model.isPlaying ? LocalizedStringKey("Pause (Space)") : LocalizedStringKey("Play (Space)"))
 
                     Button {
@@ -240,7 +241,7 @@ private struct ControlBar: View {
                     }
                     .disabled(!model.canStepForward)
                     .keyboardShortcut(.rightArrow, modifiers: [.command])
-                    .help("Next sentence (⌘→)")
+                    .help("Next sentence (→ or ⌘→)")
                 }
                 .labelStyle(AdaptiveLabelStyle(iconOnly: widthClass == .minimal))
 
@@ -254,7 +255,6 @@ private struct ControlBar: View {
                         Label("Save Position", systemImage: "bookmark")
                     }
                     .disabled(!model.canSaveManually)
-                    .keyboardShortcut("s", modifiers: [.command])
                     .help("Save the current position while paused (⌘S, up to \(ReaderModel.manualSaveLimit) saved positions)")
 
                     Button {
@@ -263,7 +263,6 @@ private struct ControlBar: View {
                         Label("Copy Sentence", systemImage: "doc.on.doc")
                     }
                     .disabled(!model.canCopy)
-                    .keyboardShortcut("c", modifiers: [.command, .shift])
                     .help("Copy the current sentence while paused (⇧⌘C)")
                 }
                 .labelStyle(AdaptiveLabelStyle(iconOnly: widthClass != .regular))
