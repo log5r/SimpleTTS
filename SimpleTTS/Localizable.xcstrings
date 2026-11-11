@@ -659,6 +659,16 @@
         }
       }
     },
+    "Drag to move to another sentence": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ドラッグして別の文へ移動"
+          }
+        }
+      }
+    },
     "Edit Note": {
       "localizations": {
         "ja": {
@@ -1233,6 +1243,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "読み上げ中"
+          }
+        }
+      }
+    },
+    "Reading position": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み上げ位置"
           }
         }
       }

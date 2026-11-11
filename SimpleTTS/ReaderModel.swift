@@ -241,6 +241,8 @@ final class ReaderModel {
     var canTogglePlayback: Bool { !isBusy && document != nil }
     var canStepBackward: Bool { !isBusy && document != nil && currentIndex > 0 }
     var canStepForward: Bool { !isBusy && currentIndex + 1 < sentenceCount }
+    /// 読み上げ位置のスライダーで移動できるか（移動先が 2 文以上あるときのみ）
+    var canSeek: Bool { !isBusy && sentenceCount > 1 }
     /// 任意セーブは停止中のみ
     var canSaveManually: Bool { !isBusy && document != nil && !isPlaying && savesCurrentDocument }
     /// コピーは停止（一時停止）中のみ

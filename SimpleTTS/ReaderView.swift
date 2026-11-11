@@ -30,6 +30,13 @@ struct ReaderView: View {
     /// macOS はウィンドウの最小の高さ（`LayoutMetrics.readerMinHeight`）があるので該当しない。
     static let shortHeightThreshold: CGFloat = 420
 
+    /// 読み上げ位置のスライダーをドラッグしている間の移動先（0 始まり）。ドラッグしていなければ nil。
+    /// ドラッグ中は見出しの番号だけを追従させ、離したときに移動する（読み上げ中に途中の文を読み直さないため）。
+    @State private var scrubbingIndex: Int?
+
+    /// 見出しに表示する文番号（0 始まり）。ドラッグ中は移動先を示す。
+    private var displayedIndex: Int { scrubbingIndex ?? model.currentIndex }
+
     var body: some View {
         if let document = model.document {
             // 文の長さに関係なく、詳細カラムに割り当てられたサイズでレイアウトする。
@@ -109,7 +116,7 @@ struct ReaderView: View {
                 .labelStyle(AdaptiveLabelStyle(iconOnly: widthClass != .regular))
                 .help(model.isPlaying ? LocalizedStringKey("Reading") : LocalizedStringKey("Paused"))
                 .fixedSize()
-                Text("\(model.currentIndex + 1) / \(model.sentenceCount)")
+                Text("\(displayedIndex + 1) / \(model.sentenceCount)")
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
                     .fixedSize()
@@ -123,7 +130,7 @@ struct ReaderView: View {
                 .help("Show notes for this document (\(model.noteListEntries.count)) (⇧⌘L)")
                 .fixedSize()
             }
-            ProgressView(value: Double(model.currentIndex + 1), total: Double(max(model.sentenceCount, 1)))
+            positionSlider
             if !model.savesCurrentDocument {
                 Label("This document and its history will not be saved", systemImage: "eye.slash")
                     .font(.caption)
@@ -132,6 +139,57 @@ struct ReaderView: View {
         }
         .padding(.horizontal)
         .padding(.vertical, isShort ? 6 : 10)
+    }
+
+    /// 読み上げ位置を示し、ドラッグやクリックで別の文へ移動できるスライダー。
+    /// キーボード（←／→）や VoiceOver の増減では、その場で 1 文ずつ移動する。
+    private var positionSlider: some View {
+        let lastIndex = max(model.sentenceCount - 1, 0)
+        let value = Binding<Double>(
+            get: { Double(displayedIndex) },
+            set: { newValue in
+                let index = min(max(Int(newValue.rounded()), 0), lastIndex)
+                if scrubbingIndex != nil {
+                    scrubbingIndex = index
+                } else if index != model.currentIndex {
+                    model.jump(to: index)
+                }
+            }
+        )
+        // 文が 1 つしかないときは範囲が 0...0 にならないようにする（その場合は操作できない）。
+        // step を指定すると文の数だけ目盛りが付き、長い文書では詰まって見えるため、値は binding で文番号に丸める。
+        return Slider(value: value, in: 0...Double(max(lastIndex, 1))) { isEditing in
+            if isEditing {
+                if scrubbingIndex == nil {
+                    scrubbingIndex = model.currentIndex
+                }
+            } else if let index = scrubbingIndex {
+                scrubbingIndex = nil
+                if index != model.currentIndex {
+                    model.jump(to: index)
+                }
+            }
+        }
+        .controlSize(.small)
+        .disabled(!model.canSeek)
+        .help("Drag to move to another sentence")
+        .accessibilityLabel("Reading position")
+        .accessibilityValue("Sentence \(displayedIndex + 1) of \(model.sentenceCount)")
+        // 連続のスライダーは増減の幅が範囲の割合になるため、キーボードと VoiceOver では 1 文ずつ動かす
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: model.step(by: 1)
+            case .decrement: model.step(by: -1)
+            @unknown default: break
+            }
+        }
+        .onChange(of: model.canSeek) { _, canSeek in
+            // 読み込み中・削除中になったら、ドラッグ中の移動先を捨てる
+            if !canSeek { scrubbingIndex = nil }
+        }
+        .onChange(of: model.document?.id) {
+            scrubbingIndex = nil
+        }
     }
 
     private func currentSentence(widthClass: ReaderWidthClass, isShort: Bool) -> some View {
