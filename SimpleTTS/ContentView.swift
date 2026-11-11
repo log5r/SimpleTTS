@@ -85,6 +85,12 @@ struct ContentView: View {
                 Task { await model.openFile(at: url) }
                 return true
             }
+            .sheet(item: $model.noteEditorRequest) { request in
+                NoteEditorView(model: model, request: request)
+            }
+            .sheet(isPresented: $model.isNotesListPresented) {
+                NotesListView(model: model)
+            }
             .alert(
                 "Error",
                 isPresented: Binding(

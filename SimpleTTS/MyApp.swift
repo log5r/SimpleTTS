@@ -88,7 +88,7 @@ extension FocusedValues {
     @Entry var readerModel: ReaderModel?
 }
 
-/// 「再生」メニュー。読み上げ画面の操作列と同じ操作に、キーボードショートカットを割り当てる。
+/// 「再生」メニューと「メモ」メニュー。読み上げ画面の操作列と同じ操作に、キーボードショートカットを割り当てる。
 /// メニューに置くことで、ショートカットを利用者が見つけられ、操作列にフォーカスがなくても使える。
 /// 前後の文への移動は修飾キーなしの ←／→ にする（操作列のボタンには従来の ⌘←／⌘→ も残している）。
 ///
@@ -98,12 +98,20 @@ extension FocusedValues {
 struct PlaybackCommands: Commands {
     @FocusedValue(\.readerModel) private var model
 
+    /// 修飾キーなしのショートカット（Space・←／→）を使えるか。
+    /// メモの編集画面や一覧を表示しているあいだは、文字入力や一覧の操作に譲る。
+    private var allowsUnmodifiedShortcuts: Bool { model?.isPresentingNotes != true }
+
+    private func unmodified(_ key: KeyEquivalent) -> KeyboardShortcut? {
+        allowsUnmodifiedShortcuts ? KeyboardShortcut(key, modifiers: []) : nil
+    }
+
     var body: some Commands {
         CommandMenu("Playback") {
             Button(model?.isPlaying == true ? LocalizedStringKey("Pause") : LocalizedStringKey("Play")) {
                 model?.togglePlayback()
             }
-            .keyboardShortcut(.space, modifiers: [])
+            .keyboardShortcut(unmodified(.space))
             .disabled(model?.canTogglePlayback != true)
 
             Divider()
@@ -111,13 +119,13 @@ struct PlaybackCommands: Commands {
             Button("Previous Sentence") {
                 model?.step(by: -1)
             }
-            .keyboardShortcut(.leftArrow, modifiers: [])
+            .keyboardShortcut(unmodified(.leftArrow))
             .disabled(model?.canStepBackward != true)
 
             Button("Next Sentence") {
                 model?.step(by: 1)
             }
-            .keyboardShortcut(.rightArrow, modifiers: [])
+            .keyboardShortcut(unmodified(.rightArrow))
             .disabled(model?.canStepForward != true)
 
             Divider()
@@ -133,6 +141,22 @@ struct PlaybackCommands: Commands {
             }
             .keyboardShortcut("c", modifiers: [.command, .shift])
             .disabled(model?.canCopy != true)
+        }
+
+        // メニュー名は「メモ」、読み上げ画面のボタンは「メモ一覧」と訳し分けるため、キーを分けている
+        CommandMenu(String(localized: "NotesMenuTitle", defaultValue: "Notes", comment: "Menu bar menu that contains note commands")) {
+            Button(model?.currentNote == nil ? LocalizedStringKey("Add Note…") : LocalizedStringKey("Edit Note…")) {
+                model?.beginEditingNote()
+            }
+            .keyboardShortcut("n", modifiers: [.command, .shift])
+            // 編集画面・一覧を表示中は、別の画面を重ねて開かない
+            .disabled(model?.canEditNotes != true || model?.isPresentingNotes == true)
+
+            Button("Show Notes") {
+                model?.isNotesListPresented = true
+            }
+            .keyboardShortcut("l", modifiers: [.command, .shift])
+            .disabled(model?.canShowNotes != true || model?.isPresentingNotes == true)
         }
     }
 }

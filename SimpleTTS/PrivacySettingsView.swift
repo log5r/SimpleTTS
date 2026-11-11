@@ -12,7 +12,7 @@ struct PrivacySettingsView: View {
             } header: {
                 Text("Storage")
             } footer: {
-                Text("When enabled, the app saves the full text, document name, an excerpt, reading position, and date. Turning this off keeps existing saved data. To save a document opened with saving disabled, enable this setting and reopen it.")
+                Text("When enabled, the app saves the full text, document name, an excerpt, reading position, date, and any notes you add to sentences. Notes can only be added while this is on. Turning this off keeps existing saved data. To save a document opened with saving disabled, enable this setting and reopen it.")
             }
 
             #if os(iOS)
@@ -48,7 +48,7 @@ struct PrivacySettingsView: View {
             } header: {
                 Text("Delete Data")
             } footer: {
-                Text("Closes the current document and deletes stored documents, history, recovery copies, and generated audio. Original files, clipboard contents, and existing backups are not deleted.")
+                Text("Closes the current document and deletes stored documents, history, notes, recovery copies, and generated audio. Original files, exported files, clipboard contents, and existing backups are not deleted.")
             }
         }
         .formStyle(.grouped)
@@ -59,7 +59,7 @@ struct PrivacySettingsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Playback will stop, and all documents, history, and generated audio stored by the app will be deleted. This cannot be undone. Original files and app settings will be kept.")
+            Text("Playback will stop, and all documents, history, notes, and generated audio stored by the app will be deleted. This cannot be undone. Original files and app settings will be kept.")
         }
     }
 }

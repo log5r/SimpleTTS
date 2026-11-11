@@ -21,6 +21,16 @@
         }
       }
     },
+    "%@ Notes": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ のメモ"
+          }
+        }
+      }
+    },
     "%@ Premium": {
       "localizations": {
         "ja": {
@@ -41,6 +51,74 @@
         }
       }
     },
+    "%lld notes": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld note"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld notes"
+                }
+              }
+            }
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld件のメモ"
+          }
+        }
+      }
+    },
+    "Add Note": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモを追加"
+          }
+        }
+      }
+    },
+    "Add Note to Sentence %lld": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld文目にメモを追加"
+          }
+        }
+      }
+    },
+    "Add Note…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモを追加…"
+          }
+        }
+      }
+    },
+    "Add a note to this sentence (⇧⌘N)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この文にメモを追加（⇧⌘N）"
+          }
+        }
+      }
+    },
     "All saved data has been deleted.": {
       "localizations": {
         "ja": {
@@ -57,6 +135,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "オートセーブ"
+          }
+        }
+      }
+    },
+    "CSV (Comma-Separated)…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSV（カンマ区切り）…"
           }
         }
       }
@@ -141,12 +229,12 @@
         }
       }
     },
-    "Closes the current document and deletes stored documents, history, recovery copies, and generated audio. Original files, clipboard contents, and existing backups are not deleted.": {
+    "Closes the current document and deletes stored documents, history, notes, recovery copies, and generated audio. Original files, exported files, clipboard contents, and existing backups are not deleted.": {
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "現在の文書を閉じ、保存した本文、履歴、復旧用の退避ファイル、生成した音声を削除します。元ファイル、クリップボードの内容、既存のバックアップは削除しません。"
+            "value": "現在の文書を閉じ、保存した本文、履歴、メモ、復旧用の退避ファイル、生成した音声を削除します。元ファイル、書き出したファイル、クリップボードの内容、既存のバックアップは削除しません。"
           }
         }
       }
@@ -157,6 +245,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "フォーカス中の文章をコピーしました。"
+          }
+        }
+      }
+    },
+    "Copy Note": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモをコピー"
           }
         }
       }
@@ -201,12 +299,42 @@
         }
       }
     },
+    "Could not delete the note: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモを削除できませんでした: %@"
+          }
+        }
+      }
+    },
     "Could not delete the saved position: %@": {
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "セーブを削除できませんでした: %@"
+          }
+        }
+      }
+    },
+    "Could not export the notes: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモ一覧を書き出せませんでした: %@"
+          }
+        }
+      }
+    },
+    "Could not load or move the notes for “%@”. Notes for this document cannot be edited in this session to protect the original data: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」のメモを読み込めず、退避もできませんでした。元のデータを守るため、このセッションではこの文書のメモを編集できません: %@"
           }
         }
       }
@@ -237,6 +365,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "セーブデータを読み込めませんでした: %@"
+          }
+        }
+      }
+    },
+    "Could not load the notes for “%@”. The original data has been moved to “%@”: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」のメモを読み込めませんでした。元のデータは「%@」に退避しました: %@"
+          }
+        }
+      }
+    },
+    "Could not load the notes for “%@”: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」のメモを読み込めませんでした: %@"
           }
         }
       }
@@ -311,6 +459,16 @@
         }
       }
     },
+    "Could not save the note: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモを保存できませんでした: %@"
+          }
+        }
+      }
+    },
     "Could not save the position: %@": {
       "localizations": {
         "ja": {
@@ -381,6 +539,26 @@
         }
       }
     },
+    "Delete Note": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモを削除"
+          }
+        }
+      }
+    },
+    "Delete Note…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモを削除…"
+          }
+        }
+      }
+    },
     "Delete all saved data?": {
       "localizations": {
         "ja": {
@@ -391,12 +569,42 @@
         }
       }
     },
+    "Delete this note?": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このメモを削除しますか？"
+          }
+        }
+      }
+    },
     "Delete this saved position?": {
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "このセーブを削除しますか？"
+          }
+        }
+      }
+    },
+    "Deleted the note for sentence %lld.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld文目のメモを削除しました。"
+          }
+        }
+      }
+    },
+    "Deleted the note.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモを削除しました。"
           }
         }
       }
@@ -451,12 +659,62 @@
         }
       }
     },
+    "Edit Note": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモを編集"
+          }
+        }
+      }
+    },
+    "Edit Note for Sentence %lld": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld文目のメモを編集"
+          }
+        }
+      }
+    },
+    "Edit Note…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモを編集…"
+          }
+        }
+      }
+    },
+    "Edit the note for this sentence (⇧⌘N)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この文のメモを編集（⇧⌘N）"
+          }
+        }
+      }
+    },
     "Error": {
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "エラー"
+          }
+        }
+      }
+    },
+    "Export": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "書き出す"
           }
         }
       }
@@ -511,6 +769,16 @@
         }
       }
     },
+    "Go to Sentence": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この文へ移動"
+          }
+        }
+      }
+    },
     "Go to this saved position": {
       "localizations": {
         "ja": {
@@ -527,6 +795,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "この文へ移動"
+          }
+        }
+      }
+    },
+    "Has a note": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモあり"
+          }
+        }
+      }
+    },
+    "Last Modified": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最終更新日"
+          }
+        }
+      }
+    },
+    "Last modified %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最終更新: %@"
+          }
+        }
+      }
+    },
+    "Leave the note empty to remove it.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモを空にして保存すると削除されます。"
           }
         }
       }
@@ -577,6 +885,94 @@
           "stringUnit": {
             "state": "translated",
             "value": "次の文へ（→ または ⌘→）"
+          }
+        }
+      }
+    },
+    "No Notes": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモはありません"
+          }
+        }
+      }
+    },
+    "No.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No."
+          }
+        }
+      }
+    },
+    "Note": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモ"
+          }
+        }
+      }
+    },
+    "Notes": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモ一覧"
+          }
+        }
+      }
+    },
+    "Notes are available when Save Documents and History is on. Turn it on, then open the file again.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモは「文書と履歴を保存」がオンのときに使えます。オンにしてから、ファイルを開き直してください。"
+          }
+        }
+      }
+    },
+    "Notes cannot be saved for this document.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この文書にはメモを保存できません。"
+          }
+        }
+      }
+    },
+    "Notes for this document cannot be saved to protect notes that could not be read.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み込めなかったメモを守るため、この文書のメモは保存できません。"
+          }
+        }
+      }
+    },
+    "NotesMenuTitle": {
+      "comment": "Menu bar menu that contains note commands",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notes"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモ"
           }
         }
       }
@@ -761,12 +1157,12 @@
         }
       }
     },
-    "Playback will stop, and all documents, history, and generated audio stored by the app will be deleted. This cannot be undone. Original files and app settings will be kept.": {
+    "Playback will stop, and all documents, history, notes, and generated audio stored by the app will be deleted. This cannot be undone. Original files and app settings will be kept.": {
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "読み上げを停止し、アプリに保存した本文、履歴、生成した音声をすべて削除します。この操作は取り消せません。元ファイルとアプリの設定は残ります。"
+            "value": "読み上げを停止し、アプリに保存した本文、履歴、メモ、生成した音声をすべて削除します。この操作は取り消せません。元ファイルとアプリの設定は残ります。"
           }
         }
       }
@@ -861,6 +1257,16 @@
         }
       }
     },
+    "Save": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存"
+          }
+        }
+      }
+    },
     "Save Documents and History": {
       "localizations": {
         "ja": {
@@ -887,6 +1293,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "一時停止中の位置を保存（⌘S、最大%lld件）"
+          }
+        }
+      }
+    },
+    "Save the note (⌘Return)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモを保存（⌘Return）"
+          }
+        }
+      }
+    },
+    "Save the notes as a CSV or TSV file": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモ一覧を CSV または TSV ファイルとして保存"
           }
         }
       }
@@ -921,12 +1347,42 @@
         }
       }
     },
+    "Saved the note for sentence %lld.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld文目のメモを保存しました。"
+          }
+        }
+      }
+    },
     "Saving is disabled to protect saved data that could not be read.": {
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "読み込めなかったセーブデータを保護するため、セーブの書き込みを停止しています。"
+          }
+        }
+      }
+    },
+    "Sentence": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文"
+          }
+        }
+      }
+    },
+    "Sentence %lld": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld文目"
           }
         }
       }
@@ -941,12 +1397,52 @@
         }
       }
     },
+    "Sentence No.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文番号"
+          }
+        }
+      }
+    },
+    "Sentence Not Found": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文が見つかりません"
+          }
+        }
+      }
+    },
     "Show Document Name on Lock Screen": {
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "ロック画面に文書名を表示"
+          }
+        }
+      }
+    },
+    "Show Notes": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモ一覧を表示"
+          }
+        }
+      }
+    },
+    "Show notes for this document (%lld) (⇧⌘L)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この文書のメモ一覧を表示（%lld件、⇧⌘L）"
           }
         }
       }
@@ -1034,12 +1530,52 @@
         }
       }
     },
+    "TSV (Tab-Separated)…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TSV（タブ区切り）…"
+          }
+        }
+      }
+    },
+    "The document for this note is no longer open.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このメモの文書はもう開いていません。"
+          }
+        }
+      }
+    },
     "The document identifier is invalid.": {
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "文書の識別子が不正です。"
+          }
+        }
+      }
+    },
+    "The note for sentence %lld will be deleted. This cannot be undone.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld文目のメモを削除します。この操作は取り消せません。"
+          }
+        }
+      }
+    },
+    "The note will be deleted. This cannot be undone.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモを削除します。この操作は取り消せません。"
           }
         }
       }
@@ -1094,6 +1630,26 @@
         }
       }
     },
+    "This sentence is no longer in the file. The note is kept so you can review, export, or delete it.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この文はファイルに見つからなくなりました。メモは残してあるので、確認・書き出し・削除ができます。"
+          }
+        }
+      }
+    },
+    "Use the note button on the current sentence to add a note.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大きく表示している文の右上にあるメモボタンで、メモを追加できます。"
+          }
+        }
+      }
+    },
     "Voice": {
       "localizations": {
         "ja": {
@@ -1134,12 +1690,12 @@
         }
       }
     },
-    "When enabled, the app saves the full text, document name, an excerpt, reading position, and date. Turning this off keeps existing saved data. To save a document opened with saving disabled, enable this setting and reopen it.": {
+    "When enabled, the app saves the full text, document name, an excerpt, reading position, date, and any notes you add to sentences. Notes can only be added while this is on. Turning this off keeps existing saved data. To save a document opened with saving disabled, enable this setting and reopen it.": {
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "オンにすると、本文全体、文書名、本文の抜粋、読書位置、日時を保存します。オフにしても、以前の保存データは残ります。保存せずに開いた文書を保存する場合は、オンにしてから開き直してください。"
+            "value": "オンにすると、本文全体、文書名、本文の抜粋、読書位置、日時と、文に付けたメモを保存します。メモはオンのときだけ追加できます。オフにしても、以前の保存データは残ります。保存せずに開いた文書を保存する場合は、オンにしてから開き直してください。"
           }
         }
       }

@@ -41,6 +41,9 @@ private final class PrivacyFixture {
         storageURL.appending(path: "Documents/\(ReaderDocument.digest(of: text)).txt")
     }
     var savesURL: URL { storageURL.appending(path: "saves.json") }
+    var notesURL: URL {
+        storageURL.appending(path: "Notes/\(ReaderDocument.notesID(for: sourceURL)).json")
+    }
     var currentAudioURL: URL { audioURL.appending(path: "Speech-\(ProcessInfo.processInfo.processIdentifier)") }
 
     init() throws {
@@ -74,7 +77,12 @@ struct ReaderModelPrivacyTests {
         try await completeErasureSurvivesLifecycleCallbacks()
         try await mediaErasureWaitsForEveryWriter()
         try await mediaCacheRecreatesAfterWindowClose()
-        print("PASS: private reading, opt-in transitions, session restore, complete erasure, lifecycle callbacks, audio cleanup races, and window reopening")
+        try await notesFollowTheDocument()
+        try await notesAreIndependentPerFile()
+        try await notesRespectPrivacyAndErasure()
+        try await unattachedNotesAreListedAndDeletable()
+        try await legacySavesKeepPositionAndNotes()
+        print("PASS: private reading, opt-in transitions, session restore, complete erasure, lifecycle callbacks, audio cleanup races, window reopening, and sentence notes")
     }
 
     private static func require(_ condition: @autoclosure () throws -> Bool, _ message: String) throws {
@@ -237,5 +245,206 @@ struct ReaderModelPrivacyTests {
         try await player.clearTemporaryFiles()
         try require(FileManager.default.contentsOfDirectory(atPath: fixture.currentAudioURL.path).isEmpty,
                     "Reopened audio cache could not be cleared")
+    }
+
+    @MainActor
+    private static func notesFollowTheDocument() async throws {
+        let fixture = try PrivacyFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.model()
+        await model.openFile(at: fixture.sourceURL)
+        try require(model.canEditNotes && model.notes.isEmpty, "A saved document should accept notes")
+
+        model.beginEditingNote()
+        guard let first = model.noteEditorRequest else { throw PrivacyTestFailure.failed("Note editor did not open") }
+        try require(first.sentenceIndex == 0 && first.isNew, "Editor did not target the current sentence")
+        try model.saveNote("  一行目\n二行目\n  ", for: first)
+        try require(model.currentNote?.text == "一行目\n二行目", "Multi-line note was not saved")
+        try require(FileManager.default.fileExists(atPath: fixture.notesURL.path), "Note was not written to disk")
+
+        // 編集中に読み上げ位置が変わっても、編集を始めた文に保存する
+        model.jump(to: 1)
+        try model.saveNote("一行目\n二行目（修正）", for: first)
+        try require(model.note(at: 0)?.text == "一行目\n二行目（修正）" && model.note(at: 1) == nil,
+                    "Note was saved to the wrong sentence")
+        guard let second = model.makeNoteEditorRequest(at: 1) else { throw PrivacyTestFailure.failed("No request") }
+        try model.saveNote("二文目のメモ", for: second)
+        let firstDate = model.note(at: 0)!.updatedAt
+        try model.saveNote("一行目\n二行目（修正）", for: model.makeNoteEditorRequest(at: 0)!)
+        try require(model.note(at: 0)?.updatedAt == firstDate, "Unchanged note updated its date")
+
+        let csv = String(decoding: model.exportedNotes(format: .csv).dropFirst(3), as: UTF8.self)
+        try require(csv.contains("\"一行目\n二行目（修正）\"") && csv.contains("二文目のメモ"), "Export lacked notes")
+
+        // 開き直すと（再起動後も）同じメモが読み込まれる
+        model.saveProgress()
+        let relaunched = fixture.model()
+        try require(relaunched.notes.map(\.text) == ["一行目\n二行目（修正）", "二文目のメモ"], "Restored session lost notes")
+        let reopened = fixture.model()
+        await reopened.openFile(at: fixture.sourceURL)
+        try require(reopened.notes.count == 2, "Reopening the file did not load notes")
+
+        // 別の文書を開いた後は、古い編集内容を保存しない
+        let otherURL = fixture.root.appending(path: "other.txt")
+        try Data("別の文書の文です。".utf8).write(to: otherURL)
+        await model.openFile(at: otherURL)
+        try require(model.notes.isEmpty, "Notes leaked to another document")
+        do {
+            try model.saveNote("混ざってはいけない", for: second)
+            throw PrivacyTestFailure.failed("Stale note request was saved to another document")
+        } catch NoteEditingError.documentClosed {}
+
+        // 空にすると削除され、最後の 1 件を消すとファイルも消える
+        await model.openFile(at: fixture.sourceURL)
+        try model.saveNote(" \n ", for: model.makeNoteEditorRequest(at: 1)!)
+        try model.deleteNote(at: 0, documentID: model.document!.notesID)
+        try require(model.notes.isEmpty, "Notes were not deleted")
+        try require(!FileManager.default.fileExists(atPath: fixture.notesURL.path), "Empty notes file was kept")
+    }
+
+    @MainActor
+    private static func notesAreIndependentPerFile() async throws {
+        let fixture = try PrivacyFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.model()
+        await model.openFile(at: fixture.sourceURL)
+        let request = model.makeNoteEditorRequest(at: 0)!
+        try model.saveNote("original", for: request)
+        let copy = fixture.root.appending(path: "copy.txt")
+        try Data(fixture.text.utf8).write(to: copy)
+        await model.openFile(at: copy)
+        try require(model.notes.isEmpty, "Identical files shared notes")
+        do {
+            try model.saveNote("wrong file", for: request)
+            throw PrivacyTestFailure.failed("Identical file accepted stale editor")
+        } catch NoteEditingError.documentClosed {}
+        try model.saveNote("copy", for: model.makeNoteEditorRequest(at: 0)!)
+        model.saveProgress()
+        let restoredCopy = fixture.model()
+        try require(restoredCopy.notes.first?.text == "copy", "Restoring identical content used another file's notes")
+        await model.openFile(at: fixture.sourceURL)
+        try require(model.notes.first?.text == "original", "Original notes were overwritten")
+        try Data(("追加文。" + fixture.text).utf8).write(to: fixture.sourceURL)
+        await model.openFile(at: fixture.sourceURL)
+        try require(model.note(at: 1)?.text == "original" && model.note(at: 0) == nil,
+                    "Edited file did not reattach matching sentence")
+        try Data("置き換えた文。".utf8).write(to: fixture.sourceURL)
+        await model.openFile(at: fixture.sourceURL)
+        try require(model.notes.isEmpty, "Missing sentence attached to unrelated text")
+        try require(model.noteListEntries.map(\.text) == ["original"] && model.noteListEntries[0].sentenceIndex == nil,
+                    "Unattached note was not listed")
+        try model.saveNote("replacement", for: model.makeNoteEditorRequest(at: 0)!)
+        try Data(fixture.text.utf8).write(to: fixture.sourceURL)
+        await model.openFile(at: fixture.sourceURL)
+        try require(model.note(at: 0)?.text == "original", "Unattached note was lost on save")
+    }
+
+    @MainActor
+    private static func unattachedNotesAreListedAndDeletable() async throws {
+        let fixture = try PrivacyFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.model()
+        await model.openFile(at: fixture.sourceURL)
+        try model.saveNote("消える文のメモ", for: model.makeNoteEditorRequest(at: 0)!)
+        try model.saveNote("=1+1", for: model.makeNoteEditorRequest(at: 1)!)
+        try Data("次の文も合成文です。新しい文です。".utf8).write(to: fixture.sourceURL)
+        await model.openFile(at: fixture.sourceURL)
+
+        let entries = model.noteListEntries
+        try require(entries.map(\.sentenceIndex) == [0, nil], "Moved and missing notes were not listed in order")
+        try require(model.currentNote?.text == "=1+1" && model.note(at: 1) == nil,
+                    "Unattached note appeared on the reader")
+        let csv = String(decoding: model.exportedNotes(format: .csv).dropFirst(3), as: UTF8.self)
+        try require(csv.contains("\r\n1,次の文も合成文です。,'=1+1,") && csv.contains("\r\n,保存を確認するための合成文です。,消える文のメモ,"),
+                    "Export lacked the unattached note or formula protection: \(csv.debugDescription)")
+
+        let documentID = model.document!.notesID
+        try model.deleteNote(entries[1], documentID: documentID)
+        try require(model.noteListEntries.map(\.text) == ["=1+1"], "Unattached note was not deleted")
+        let reopened = fixture.model()
+        await reopened.openFile(at: fixture.sourceURL)
+        try require(reopened.noteListEntries.map(\.text) == ["=1+1"], "Deleted unattached note came back")
+
+        // 読み込めない状態では削除できない
+        model.retainsDocuments = false
+        do {
+            try model.deleteNote(model.noteListEntries[0], documentID: documentID)
+            throw PrivacyTestFailure.failed("Note was deleted while saving was off")
+        } catch NoteEditingError.notEditable {}
+    }
+
+    /// メモ機能より前のセーブ（notesID なし）でも、ファイルを開くと位置を再開でき、
+    /// そのセーブから復元した文書で書いたメモもファイルに引き継ぐ。
+    @MainActor
+    private static func legacySavesKeepPositionAndNotes() async throws {
+        let fixture = try PrivacyFixture()
+        defer { fixture.cleanUp() }
+        let first = fixture.model()
+        await first.openFile(at: fixture.sourceURL)
+        first.jump(to: 1)
+        first.saveProgress()
+        let data = try Data(contentsOf: fixture.savesURL)
+        var saves = try JSONSerialization.jsonObject(with: data) as! [[String: Any]]
+        for index in saves.indices { saves[index].removeValue(forKey: "notesID") }
+        try JSONSerialization.data(withJSONObject: saves).write(to: fixture.savesURL)
+
+        let restored = fixture.model()
+        try require(restored.document?.notesAreKeyedByContent == true && restored.currentIndex == 1,
+                    "Legacy session was not restored")
+        try restored.saveNote("場所の分からないメモ", for: restored.makeNoteEditorRequest(at: 1)!)
+        let contentKeyedURL = fixture.storageURL.appending(path: "Notes/\(ReaderDocument.digest(of: fixture.text)).json")
+        try require(FileManager.default.fileExists(atPath: contentKeyedURL.path), "Content-keyed note was not saved")
+
+        await restored.openFile(at: fixture.sourceURL)
+        try require(restored.currentIndex == 1, "Legacy autosave position was not resumed")
+        try require(restored.note(at: 1)?.text == "場所の分からないメモ", "Content-keyed note was not adopted")
+        try require(FileManager.default.fileExists(atPath: fixture.notesURL.path)
+                    && !FileManager.default.fileExists(atPath: contentKeyedURL.path),
+                    "Adopted note was not moved to the file's notes")
+        restored.saveProgress()
+        try require(restored.autoSaves.count == 1 && restored.autoSaves[0].notesID == ReaderDocument.notesID(for: fixture.sourceURL),
+                    "Legacy autosave was duplicated instead of replaced")
+
+        // 同じ本文の別のファイルには付けない
+        let copy = fixture.root.appending(path: "copy.txt")
+        try Data(fixture.text.utf8).write(to: copy)
+        await restored.openFile(at: copy)
+        try require(restored.noteListEntries.isEmpty, "Adopted note leaked to another file")
+    }
+
+    private static func notesRespectPrivacyAndErasure() async throws {
+        let fixture = try PrivacyFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.model()
+        model.retainsDocuments = false
+        await model.openFile(at: fixture.sourceURL)
+        try require(!model.canEditNotes && model.makeNoteEditorRequest(at: 0) == nil,
+                    "Private document accepted notes")
+        model.beginEditingNote()
+        try require(model.noteEditorRequest == nil, "Private document opened the note editor")
+
+        model.retainsDocuments = true
+        await model.openFile(at: fixture.sourceURL)
+        try model.saveNote("消されるメモ", for: model.makeNoteEditorRequest(at: 0)!)
+        model.retainsDocuments = false
+        try require(!model.canEditNotes, "Disabling saving kept notes editable")
+        try require(model.notes.count == 1, "Existing notes should stay visible")
+
+        model.retainsDocuments = true
+        model.isNotesListPresented = true
+        await model.deleteAllStoredData()
+        try require(model.notes.isEmpty && !model.isPresentingNotes, "Erasure kept notes on screen")
+        try require(!FileManager.default.fileExists(atPath: fixture.notesURL.path), "Notes survived erasure")
+        await model.openFile(at: fixture.sourceURL)
+        try require(model.notes.isEmpty && model.canEditNotes, "Erased notes came back")
+
+        // 壊れたメモは退避して、新しいメモを書けるようにする
+        try Data("broken".utf8).write(to: fixture.notesURL)
+        let recovered = fixture.model()
+        await recovered.openFile(at: fixture.sourceURL)
+        try require(recovered.errorMessage != nil && recovered.canEditNotes, "Corrupted notes were not reported")
+        let backups = try FileManager.default.contentsOfDirectory(atPath: fixture.notesURL.deletingLastPathComponent().path)
+            .filter { $0.contains(".corrupted-") }
+        try require(backups.count == 1, "Corrupted notes were not quarantined")
     }
 }

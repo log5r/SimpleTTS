@@ -6,12 +6,23 @@ import Foundation
 nonisolated struct ReaderDocument: Identifiable, Sendable {
     let id: String
     let title: String
+    /// メモの保存先の ID。ファイルから開いた文書はファイルパスの SHA-256（`notesID(for:)`）。
+    /// ファイルの場所が分からない文書（場所を記録していない旧形式のセーブから復元した文書など）は `id` と同じ。
+    let notesID: String
     let sentences: [String]
 
-    init(title: String, text: String) {
+    /// メモを本文の ID で保存している（ファイルの場所が分からない）か
+    var notesAreKeyedByContent: Bool { notesID == id }
+
+    init(title: String, text: String, notesID: String? = nil) {
         self.id = Self.digest(of: text)
+        self.notesID = notesID ?? self.id
         self.title = title
         self.sentences = SentenceSplitter.split(text)
+    }
+
+    static func notesID(for url: URL) -> String {
+        digest(of: url.standardizedFileURL.path)
     }
 
     static func digest(of text: String) -> String {
@@ -36,6 +47,16 @@ nonisolated struct SavePoint: Codable, Identifiable, Hashable, Sendable {
     var sentenceCount: Int
     var excerpt: String
     var createdAt: Date
+    /// 文書の `notesID`。メモ機能より前のセーブでは nil。
+    var notesID: String? = nil
+
+    /// ファイルの場所を記録していない（旧形式の、またはそうしたセーブから復元した文書の）セーブか
+    var isKeyedByContent: Bool { notesID == nil || notesID == documentID }
+
+    /// 文書の位置として使えるセーブか。ファイルの場所を記録していないセーブは、同じ本文のどのファイルにも当てる。
+    func belongs(to document: ReaderDocument) -> Bool {
+        documentID == document.id && (isKeyedByContent || notesID == document.notesID)
+    }
 }
 
 /// 本文を「読み上げ・表示の単位」となる文に分割する。

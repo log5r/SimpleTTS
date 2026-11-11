@@ -43,14 +43,21 @@ struct ReaderView: View {
                         ContextColumn(
                             sentences: model.previousContext,
                             currentIndex: model.currentIndex,
+                            notedIndices: notedIndices,
                             alignment: .bottom,
                             onSelect: { model.jump(to: $0) }
                         )
-                        currentSentence(widthClass: widthClass, isShort: isShort)
-                            .layoutPriority(1)
+                        VStack(spacing: isShort ? 4 : 8) {
+                            currentSentence(widthClass: widthClass, isShort: isShort)
+                            if let note = model.currentNote {
+                                notePreview(note, isShort: isShort)
+                            }
+                        }
+                        .layoutPriority(1)
                         ContextColumn(
                             sentences: model.nextContext,
                             currentIndex: model.currentIndex,
+                            notedIndices: notedIndices,
                             alignment: .top,
                             onSelect: { model.jump(to: $0) }
                         )
@@ -106,6 +113,15 @@ struct ReaderView: View {
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
                     .fixedSize()
+                Button {
+                    model.isNotesListPresented = true
+                } label: {
+                    Label("Notes", systemImage: "list.bullet.rectangle")
+                }
+                .labelStyle(AdaptiveLabelStyle(iconOnly: widthClass == .minimal))
+                .disabled(!model.canShowNotes)
+                .help("Show notes for this document (\(model.noteListEntries.count)) (⇧⌘L)")
+                .fixedSize()
             }
             ProgressView(value: Double(model.currentIndex + 1), total: Double(max(model.sentenceCount, 1)))
             if !model.savesCurrentDocument {
@@ -138,6 +154,73 @@ struct ReaderView: View {
             RoundedRectangle(cornerRadius: 16)
                 .strokeBorder(Color.accentColor.opacity(model.isPlaying ? 0.7 : 0.25), lineWidth: 2)
         )
+        .overlay(alignment: .topTrailing) {
+            noteButton
+                .padding(isShort ? 4 : 8)
+        }
+    }
+
+    /// 現在の文のメモを書く・直すボタン。大写しの文の右上に置く。
+    private var noteButton: some View {
+        let hasNote = model.currentNote != nil
+        return Button {
+            model.beginEditingNote()
+        } label: {
+            Label(
+                hasNote ? LocalizedStringKey("Edit Note") : LocalizedStringKey("Add Note"),
+                systemImage: hasNote ? "note.text" : "square.and.pencil"
+            )
+            .labelStyle(.iconOnly)
+            .font(.title3)
+            .frame(width: Self.noteButtonSize, height: Self.noteButtonSize)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(hasNote ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+        .disabled(!model.canEditNotes)
+        .help(noteButtonHelp(hasNote: hasNote))
+    }
+
+    private func noteButtonHelp(hasNote: Bool) -> LocalizedStringKey {
+        if !model.savesCurrentDocument {
+            return "Notes are available when Save Documents and History is on. Turn it on, then open the file again."
+        }
+        return hasNote ? "Edit the note for this sentence (⇧⌘N)" : "Add a note to this sentence (⇧⌘N)"
+    }
+
+    /// 現在の文に付けたメモの冒頭。押すと編集する。
+    private func notePreview(_ note: SentenceNote, isShort: Bool) -> some View {
+        Button {
+            model.beginEditingNote()
+        } label: {
+            Label {
+                Text(note.text)
+                    .lineLimit(isShort ? 1 : 2)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } icon: {
+                Image(systemName: "note.text")
+                    .foregroundStyle(.tint)
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, isShort ? 4 : 8)
+            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!model.canEditNotes)
+        .fixedSize(horizontal: false, vertical: true)
+        .help("Edit the note for this sentence (⇧⌘N)")
+        .accessibilityLabel("Note")
+        .accessibilityValue(note.text)
+    }
+
+    private static let noteButtonSize: CGFloat = 28
+
+    private var notedIndices: Set<Int> {
+        Set(model.notes.map(\.sentenceIndex))
     }
 
     private func currentSentenceText(widthClass: ReaderWidthClass, isShort: Bool) -> some View {
@@ -146,6 +229,8 @@ struct ReaderView: View {
             .multilineTextAlignment(.center)
             .minimumScaleFactor(0.4)
             .frame(maxWidth: .infinity, minHeight: isShort ? 44 : 80)
+            // 右上のメモボタンと重ならないよう、左右を同じだけ空けて中央をそろえる
+            .padding(.horizontal, Self.noteButtonSize - (widthClass == .regular ? 8 : 4))
     }
 }
 
@@ -169,19 +254,29 @@ private struct AdaptiveLabelStyle: LabelStyle {
 private struct ContextColumn: View {
     let sentences: [ContextSentence]
     let currentIndex: Int
+    /// メモを付けた文の番号。該当する文にはメモの印を付ける。
+    let notedIndices: Set<Int>
     let alignment: Alignment
     let onSelect: @MainActor (Int) -> Void
 
     var body: some View {
         VStack(spacing: 10) {
             ForEach(sentences) { sentence in
-                Text(sentence.text)
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    if notedIndices.contains(sentence.id) {
+                        Image(systemName: "note.text")
+                            .font(.callout)
+                            .foregroundStyle(.tint)
+                            .accessibilityLabel("Has a note")
+                    }
+                    Text(sentence.text)
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity)
                     .opacity(opacity(for: sentence.id))
                     .contentShape(Rectangle())
                     .onTapGesture { onSelect(sentence.id) }

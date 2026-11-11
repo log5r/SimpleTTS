@@ -13,7 +13,38 @@ nonisolated struct ContextSentence: Identifiable, Hashable, Sendable {
     let text: String
 }
 
-/// 読み上げ・セーブ・コピーなどアプリ全体の状態を管理する。
+/// メモを編集する画面に渡す内容。開いた時点の文書と文を固定し、
+/// 編集中に読み上げが進んだり別の文書を開いたりしても、別の文に保存しないようにする。
+nonisolated struct NoteEditorRequest: Identifiable, Hashable, Sendable {
+    let documentID: String
+    let sentenceIndex: Int
+    let sentence: String
+    let text: String
+    /// 既存のメモの最終更新日時（新しいメモなら nil）
+    let updatedAt: Date?
+
+    var id: String { "\(documentID)#\(sentenceIndex)" }
+    var isNew: Bool { updatedAt == nil }
+}
+
+/// メモを保存・削除できなかった理由
+nonisolated enum NoteEditingError: LocalizedError {
+    /// 編集を始めた文書が閉じられた（別の文書を開いた、全データを削除したなど）
+    case documentClosed
+    /// 保存しない文書、またはメモを読み込めず書き込みを止めている文書
+    case notEditable
+
+    var errorDescription: String? {
+        switch self {
+        case .documentClosed:
+            return String(localized: "The document for this note is no longer open.")
+        case .notEditable:
+            return String(localized: "Notes cannot be saved for this document.")
+        }
+    }
+}
+
+/// 読み上げ・セーブ・コピー・メモなどアプリ全体の状態を管理する。
 @Observable
 final class ReaderModel {
     static let manualSaveLimit = 100
@@ -55,6 +86,22 @@ final class ReaderModel {
     private(set) var dataDeletionError: String?
     var errorMessage: String?
     var isImporterPresented = false
+
+    /// 開いている文書のメモ（文番号順）。保存しない文書では常に空。
+    private(set) var notes: [SentenceNote] = []
+    /// メモを編集する画面に渡す内容。nil でないあいだ編集画面を表示する。
+    var noteEditorRequest: NoteEditorRequest?
+    /// メモ一覧を表示しているか
+    var isNotesListPresented = false
+    /// 開いている文書のメモを読み込めたか。読み込めず退避もできなかった場合は、上書きしないよう編集を止める。
+    private var notesAreWritable = false
+    /// 本文が変わって付け先の文が見つからなくなったメモ。読み上げ画面には出さず、一覧と書き出しにだけ含める。
+    private(set) var unattachedNotes: [SentenceNote] = []
+
+    /// メモ一覧に出す行（文に付いたメモと、付け先の文が見つからないメモ）
+    var noteListEntries: [NoteListEntry] {
+        NoteListEntry.entries(attached: notes, unattached: unattachedNotes)
+    }
 
     private var storedVoice: String?
     private var storedRate: Double
@@ -198,6 +245,18 @@ final class ReaderModel {
     var canSaveManually: Bool { !isBusy && document != nil && !isPlaying && savesCurrentDocument }
     /// コピーは停止（一時停止）中のみ
     var canCopy: Bool { !isBusy && currentSentence != nil && !isPlaying }
+    /// メモは本文と履歴を保存する文書でのみ書ける（読み上げ中も書ける）
+    var canEditNotes: Bool { !isBusy && document != nil && savesCurrentDocument && notesAreWritable }
+    var canShowNotes: Bool { !isBusy && document != nil }
+    /// メモの編集画面か一覧を表示しているか。表示中はキーボードショートカットを文字入力に譲る。
+    var isPresentingNotes: Bool { noteEditorRequest != nil || isNotesListPresented }
+
+    /// 指定した文に付けたメモ
+    func note(at index: Int) -> SentenceNote? {
+        notes.first { $0.sentenceIndex == index }
+    }
+
+    var currentNote: SentenceNote? { note(at: currentIndex) }
 
     // MARK: - File
 
@@ -211,7 +270,7 @@ final class ReaderModel {
         do {
             (text, newDocument) = try await Task.detached(priority: .userInitiated) {
                 let text = try TextFileLoader.read(from: url)
-                return (text, ReaderDocument(title: url.lastPathComponent, text: text))
+                return (text, ReaderDocument(title: url.lastPathComponent, text: text, notesID: ReaderDocument.notesID(for: url)))
             }.value
         } catch {
             if generation == lifecycleGeneration {
@@ -239,7 +298,8 @@ final class ReaderModel {
         }
         document = newDocument
         reachedEnd = false
-        if retainsDocuments, let autosave = autoSaves.first(where: { $0.documentID == newDocument.id }) {
+        loadNotes(for: newDocument)
+        if retainsDocuments, let autosave = autoSaves.first(where: { $0.belongs(to: newDocument) }) {
             currentIndex = clampedIndex(autosave.sentenceIndex, in: newDocument)
             statusMessage = String(localized: "Ready to resume at sentence \(currentIndex + 1).")
         } else {
@@ -414,6 +474,151 @@ final class ReaderModel {
         statusMessage = String(localized: "Copied the current sentence.")
     }
 
+    // MARK: - Notes
+
+    /// 指定した文（省略時は現在の文）のメモを編集する画面を開く。
+    func beginEditingNote(at index: Int? = nil) {
+        guard let request = makeNoteEditorRequest(at: index ?? currentIndex) else { return }
+        noteEditorRequest = request
+    }
+
+    /// 指定した文のメモを編集する画面に渡す内容。編集できないときは nil。
+    func makeNoteEditorRequest(at index: Int) -> NoteEditorRequest? {
+        guard canEditNotes, let document, document.sentences.indices.contains(index) else { return nil }
+        let existing = note(at: index)
+        return NoteEditorRequest(
+            documentID: document.notesID,
+            sentenceIndex: index,
+            sentence: document.sentences[index],
+            text: existing?.text ?? "",
+            updatedAt: existing?.updatedAt
+        )
+    }
+
+    /// メモを保存する。前後の空白と改行だけになったメモは削除する。
+    /// 書き込みに失敗した場合はメモリ上のメモも変更せずにエラーを投げる（編集画面は開いたままにする）。
+    func saveNote(_ text: String, for request: NoteEditorRequest) throws {
+        let document = try editableDocument(id: request.documentID)
+        let index = request.sentenceIndex
+        guard document.sentences.indices.contains(index), document.sentences[index] == request.sentence else { throw NoteEditingError.documentClosed }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            try deleteNote(at: index, documentID: document.notesID)
+            return
+        }
+        if note(at: index)?.text == trimmed { return }
+
+        var updated = notes.filter { $0.sentenceIndex != index }
+        updated.append(SentenceNote(
+            sentenceIndex: index,
+            sentence: document.sentences[index],
+            text: trimmed,
+            updatedAt: Date()
+        ))
+        try commitNotes(updated, for: document)
+        statusMessage = String(localized: "Saved the note for sentence \(index + 1).")
+    }
+
+    /// 指定した文のメモを削除する。
+    func deleteNote(at index: Int, documentID: String) throws {
+        let document = try editableDocument(id: documentID)
+        guard note(at: index) != nil else { return }
+        try commitNotes(notes.filter { $0.sentenceIndex != index }, for: document)
+        statusMessage = String(localized: "Deleted the note for sentence \(index + 1).")
+    }
+
+    /// 付け先の文が見つからないメモを削除する。
+    func deleteUnattachedNote(_ note: SentenceNote, documentID: String) throws {
+        let document = try editableDocument(id: documentID)
+        guard let position = unattachedNotes.firstIndex(of: note) else { return }
+        var remaining = unattachedNotes
+        remaining.remove(at: position)
+        try commitNotes(notes, unattached: remaining, for: document)
+        statusMessage = String(localized: "Deleted the note.")
+    }
+
+    /// メモ一覧の行のメモを削除する。
+    func deleteNote(_ entry: NoteListEntry, documentID: String) throws {
+        if let index = entry.sentenceIndex {
+            try deleteNote(at: index, documentID: documentID)
+        } else {
+            try deleteUnattachedNote(entry.note, documentID: documentID)
+        }
+    }
+
+    private func editableDocument(id: String) throws -> ReaderDocument {
+        guard let document, document.notesID == id else { throw NoteEditingError.documentClosed }
+        guard canEditNotes else { throw NoteEditingError.notEditable }
+        return document
+    }
+
+    /// メモ一覧を書き出す。見出しは表示中の言語にする。
+    func exportedNotes(format: NotesExport.Format) -> Data {
+        let headers = [
+            String(localized: "Sentence No."),
+            String(localized: "Sentence"),
+            String(localized: "Note"),
+            String(localized: "Last Modified"),
+        ]
+        return NotesExport.data(for: NotesExport.table(noteListEntries, format: format, headers: headers))
+    }
+
+    /// 書き出すファイルの既定の名前（拡張子なし）
+    var notesExportFilename: String {
+        let title = document.map { ($0.title as NSString).deletingPathExtension } ?? "SimpleTTS"
+        return String(localized: "\(title) Notes")
+    }
+
+    /// 文書のメモを読み込む。保存しない文書では読み込まない（位置の復元と同じ扱い）。
+    private func loadNotes(for document: ReaderDocument) {
+        isNotesListPresented = false
+        noteEditorRequest = nil
+        notes = []
+        unattachedNotes = []
+        notesAreWritable = false
+        guard currentDocumentIsStored else { return }
+        do {
+            let stored = try storage.loadNotes(documentID: document.notesID) ?? adoptContentKeyedNotes(for: document)
+            if let stored {
+                (notes, unattachedNotes) = stored.partitioned(for: document.sentences)
+            }
+            notesAreWritable = true
+        } catch let StorageError.notesUnreadable(underlying, backupURL) {
+            if let backupURL {
+                // 読めなかったファイルは退避済みなので、新しいメモを書いても元のデータは失われない
+                notesAreWritable = true
+                reportError(String(localized: "Could not load the notes for “\(document.title)”. The original data has been moved to “\(backupURL.lastPathComponent)”: \(underlying.localizedDescription)"))
+            } else {
+                reportError(String(localized: "Could not load or move the notes for “\(document.title)”. Notes for this document cannot be edited in this session to protect the original data: \(underlying.localizedDescription)"))
+            }
+        } catch {
+            reportError(String(localized: "Could not load the notes for “\(document.title)”: \(error.localizedDescription)"))
+        }
+    }
+
+    /// メモをディスクに書き込み、成功したときだけメモリ上の一覧に反映する。
+    /// ファイルの場所が分からない状態（旧形式のセーブから復元した文書）で書いたメモを、同じ本文のファイルを開いたときに引き継ぐ。
+    /// 引き継いだメモはファイルパスの ID で保存し直し、本文の ID のメモは消す（同じ本文の別のファイルに重ねて付けない）。
+    private func adoptContentKeyedNotes(for document: ReaderDocument) throws -> DocumentNotes? {
+        guard !document.notesAreKeyedByContent,
+              var adopted = try storage.loadNotes(documentID: document.id) else { return nil }
+        adopted.documentID = document.notesID
+        adopted.documentTitle = document.title
+        try storage.writeNotes(adopted)
+        // 消せなくても、引き継いだメモは保存できているので続ける
+        try? storage.writeNotes(DocumentNotes(documentID: document.id, documentTitle: document.title, notes: []))
+        return adopted
+    }
+
+    /// 付け先の文が見つからないメモも一緒に書き、失わないようにする。
+    private func commitNotes(_ updated: [SentenceNote], unattached: [SentenceNote]? = nil, for document: ReaderDocument) throws {
+        let sorted = updated.sorted { $0.sentenceIndex < $1.sentenceIndex }
+        let unattached = unattached ?? unattachedNotes
+        try storage.writeNotes(DocumentNotes(documentID: document.notesID, documentTitle: document.title, notes: sorted + unattached))
+        notes = sorted
+        unattachedNotes = unattached
+    }
+
     // MARK: - Lifecycle
 
     /// 文書を閉じてから削除し、終了通知や合成完了通知によるデータの再生成を防ぐ。
@@ -434,6 +639,11 @@ final class ReaderModel {
         currentDocumentIsStored = false
         reachedEnd = false
         statusMessage = nil
+        notes = []
+        unattachedNotes = []
+        notesAreWritable = false
+        noteEditorRequest = nil
+        isNotesListPresented = false
 
         // 一方が失敗しても、もう一方の削除を試みる。
         var failures: [String] = []
@@ -531,12 +741,13 @@ final class ReaderModel {
     }
 
     private func apply(_ save: SavePoint, text: String) {
-        let restored = ReaderDocument(title: save.documentTitle, text: text)
+        let restored = ReaderDocument(title: save.documentTitle, text: text, notesID: save.notesID)
         guard !restored.sentences.isEmpty else { return }
         document = restored
         currentDocumentIsStored = true
         currentIndex = clampedIndex(save.sentenceIndex, in: restored)
         reachedEnd = false
+        loadNotes(for: restored)
     }
 
     private func clampedIndex(_ index: Int, in document: ReaderDocument) -> Int {
@@ -547,7 +758,8 @@ final class ReaderModel {
     /// 書き込みに失敗した場合はメモリ上のセーブ一覧も変更しない。
     private func autosave() throws {
         guard !isClearingData, savesCurrentDocument, let document else { return }
-        var updated = saves.filter { !($0.kind == .auto && $0.documentID == document.id) }
+        // ファイルの場所を記録していない旧形式のオートセーブも、同じ本文なら置き換える
+        var updated = saves.filter { !($0.kind == .auto && $0.belongs(to: document)) }
         updated.append(makeSavePoint(kind: .auto, document: document))
 
         let autos = updated.filter { $0.kind == .auto }.sorted { $0.createdAt > $1.createdAt }
@@ -567,7 +779,8 @@ final class ReaderModel {
             sentenceIndex: currentIndex,
             sentenceCount: document.sentences.count,
             excerpt: String((currentSentence ?? "").prefix(80)),
-            createdAt: Date()
+            createdAt: Date(),
+            notesID: document.notesID
         )
     }
 

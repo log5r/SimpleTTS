@@ -9,6 +9,11 @@ nonisolated enum StorageError: LocalizedError {
     case writeBlocked
     case invalidDocumentID
     case unsafeStorageDirectory
+    /// メモのファイルを読み込めなかった。`backupURL` は退避先。退避にも失敗した場合は nil で、
+    /// その文書のメモの書き込みを停止している。
+    case notesUnreadable(underlying: Error, backupURL: URL?)
+    /// 読めなかったメモのファイルを退避できなかったため、上書きを防ぐために書き込みを停止している。
+    case notesWriteBlocked
 
     var errorDescription: String? {
         switch self {
@@ -20,6 +25,10 @@ nonisolated enum StorageError: LocalizedError {
             return String(localized: "The document identifier is invalid.")
         case .unsafeStorageDirectory:
             return String(localized: "Cannot save because the storage location is a link or is not a regular folder.")
+        case let .notesUnreadable(underlying, _):
+            return underlying.localizedDescription
+        case .notesWriteBlocked:
+            return String(localized: "Notes for this document cannot be saved to protect notes that could not be read.")
         }
     }
 }
@@ -28,6 +37,7 @@ nonisolated enum StorageError: LocalizedError {
 ///
 /// 本文はセーブした位置から再開できるよう `Documents/<SHA-256>.txt` にコピーしておく。
 /// これにより、元ファイルへのアクセス権（セキュリティスコープ付きブックマーク）がなくても再開できる。
+/// 文に付けたメモはファイルパスのハッシュごとに `Notes/<SHA-256>.json` に保存する。
 final class Storage {
     private static let corruptedPrefix = "saves.corrupted-"
 
@@ -39,8 +49,12 @@ final class Storage {
     /// 元のファイルを `.atomic` 書き込みで上書きしてしまわないよう、`writeSaves` を拒否する。
     private(set) var isWriteBlocked = false
 
+    /// 読み込めなかったメモのファイルを退避できなかった文書。上書きしないよう `writeNotes` を拒否する。
+    private var notesWriteBlockedIDs: Set<String> = []
+
     private var documentsURL: URL { get throws { try baseURL.appending(path: "Documents", directoryHint: .isDirectory) } }
     private var savesURL: URL { get throws { try baseURL.appending(path: "saves.json", directoryHint: .notDirectory) } }
+    private var notesURL: URL { get throws { try baseURL.appending(path: "Notes", directoryHint: .isDirectory) } }
 
     /// `baseURL` はテストで隔離した保存先を指定するために使う。
     /// 作成とバックアップ除外は最初の読み書きで行い、失敗を呼び出し側へ返す。
@@ -58,7 +72,7 @@ final class Storage {
 
     private func prepareDirectories() throws {
         let fileManager = FileManager.default
-        for directory in [try baseURL, try documentsURL] {
+        for directory in [try baseURL, try documentsURL, try notesURL] {
             if fileManager.fileExists(atPath: directory.path) {
                 let values = try directory.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
                 guard values.isDirectory == true, values.isSymbolicLink != true else {
@@ -101,7 +115,7 @@ final class Storage {
         decoder.dateDecodingStrategy = .iso8601
         do {
             let saves = try decoder.decode([SavePoint].self, from: data)
-            guard saves.allSatisfy({ Self.isValidDocumentID($0.documentID) }) else {
+            guard saves.allSatisfy({ Self.isValidDocumentID($0.documentID) && ($0.notesID.map(Self.isValidDocumentID) ?? true) }) else {
                 throw StorageError.invalidDocumentID
             }
             return saves
@@ -112,7 +126,7 @@ final class Storage {
 
     func writeSaves(_ saves: [SavePoint]) throws {
         guard !isWriteBlocked else { throw StorageError.writeBlocked }
-        guard saves.allSatisfy({ Self.isValidDocumentID($0.documentID) }) else {
+        guard saves.allSatisfy({ Self.isValidDocumentID($0.documentID) && ($0.notesID.map(Self.isValidDocumentID) ?? true) }) else {
             throw StorageError.invalidDocumentID
         }
         try prepareDirectories()
@@ -157,6 +171,78 @@ final class Storage {
         return files.contains {
             $0.lastPathComponent.hasPrefix(Self.corruptedPrefix) && $0.pathExtension == "json"
         }
+    }
+
+    // MARK: - Notes
+
+    /// 文書に付けたメモを読み込む。ファイルがなければ nil を返す。
+    ///
+    /// 読み込み・解析に失敗した場合は元のファイルを `Notes/<ID>.corrupted-*.json` に退避して
+    /// `StorageError.notesUnreadable` を投げる。退避にも失敗した場合は、その文書の `writeNotes` を拒否する。
+    func loadNotes(documentID: String) throws -> DocumentNotes? {
+        let url = try notesFileURL(id: documentID)
+        try prepareDirectories()
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            return nil
+        } catch {
+            throw quarantineUnreadableNotes(at: url, documentID: documentID, underlying: error)
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        do {
+            let notes = try decoder.decode(DocumentNotes.self, from: data)
+            guard notes.documentID == documentID else { throw StorageError.invalidDocumentID }
+            return notes
+        } catch {
+            throw quarantineUnreadableNotes(at: url, documentID: documentID, underlying: error)
+        }
+    }
+
+    /// 文書のメモを書き込む。メモが 1 件もなければファイルを削除する。
+    func writeNotes(_ notes: DocumentNotes) throws {
+        let url = try notesFileURL(id: notes.documentID)
+        guard !notesWriteBlockedIDs.contains(notes.documentID) else { throw StorageError.notesWriteBlocked }
+        try prepareDirectories()
+        if notes.notes.isEmpty {
+            do {
+                try FileManager.default.removeItem(at: url)
+            } catch let error as CocoaError where error.code == .fileNoSuchFile {
+                // 既にない
+            }
+            return
+        }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(notes)
+        try data.write(to: url, options: .atomic)
+        try excludeFromBackup(url)
+    }
+
+    private func quarantineUnreadableNotes(at url: URL, documentID: String, underlying: Error) -> StorageError {
+        let stamp = Int(Date().timeIntervalSince1970)
+        let suffix = UUID().uuidString.prefix(8)
+        do {
+            let backup = try notesURL.appending(
+                path: "\(documentID).corrupted-\(stamp)-\(suffix).json",
+                directoryHint: .notDirectory
+            )
+            try excludeFromBackup(url)
+            try FileManager.default.moveItem(at: url, to: backup)
+            return .notesUnreadable(underlying: underlying, backupURL: backup)
+        } catch {
+            notesWriteBlockedIDs.insert(documentID)
+            return .notesUnreadable(underlying: underlying, backupURL: nil)
+        }
+    }
+
+    private func notesFileURL(id: String) throws -> URL {
+        guard Self.isValidDocumentID(id) else { throw StorageError.invalidDocumentID }
+        return try notesURL.appending(path: "\(id).json", directoryHint: .notDirectory)
     }
 
     // MARK: - Document text cache
@@ -207,6 +293,7 @@ final class Storage {
             try fileManager.removeItem(at: url)
         }
         isWriteBlocked = false
+        notesWriteBlockedIDs = []
         try prepareDirectories()
     }
 
@@ -215,7 +302,7 @@ final class Storage {
         return try documentsURL.appending(path: "\(id).txt", directoryHint: .notDirectory)
     }
 
-    private static func isValidDocumentID(_ id: String) -> Bool {
+    nonisolated private static func isValidDocumentID(_ id: String) -> Bool {
         id.utf8.count == 64 && id.utf8.allSatisfy { (48...57).contains($0) || (97...102).contains($0) }
     }
 }
