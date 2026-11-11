@@ -131,6 +131,61 @@ nonisolated enum SentenceSplitter {
     }
 }
 
+/// 検索語を含む文（検索結果の 1 行）
+nonisolated struct SentenceSearchResult: Identifiable, Hashable, Sendable {
+    /// 文書内の文番号（0 始まり）
+    let sentenceIndex: Int
+    let sentence: String
+
+    var id: Int { sentenceIndex }
+}
+
+/// 文書の文から、検索語を部分一致で含むものを探す。
+nonisolated enum SentenceSearch {
+    /// 大文字と小文字、全角と半角（「ＡＢＣ」と「ABC」、「ｶﾅ」と「カナ」）を区別しない。
+    /// 濁点・半濁点は区別したいので（「は」と「ば」は別の語）、`.diacriticInsensitive` は付けない。
+    static let options: String.CompareOptions = [.caseInsensitive, .widthInsensitive]
+    /// 一覧に出す件数の上限。一致する文が非常に多いとき、一覧の更新で入力が遅れないようにする。
+    static let resultLimit = 1000
+
+    /// 前後の空白と改行を除いた検索語。空なら nil（検索しない）。
+    static func normalizedQuery(_ query: String) -> String? {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// 検索語を含む文を文書の順に返す（最大 `limit` 件）。`totalCount` は上限を超えた分も含めた一致数。
+    static func search(_ query: String, in sentences: [String], limit: Int = resultLimit) -> (results: [SentenceSearchResult], totalCount: Int) {
+        guard let query = normalizedQuery(query) else { return ([], 0) }
+        var results: [SentenceSearchResult] = []
+        var totalCount = 0
+        for (index, sentence) in sentences.enumerated() {
+            // 入力変更や文書の切り替えで不要になった走査を速やかに止める。
+            if Task.isCancelled { return ([], 0) }
+            guard sentence.range(of: query, options: options) != nil else { continue }
+            totalCount += 1
+            if results.count < limit {
+                results.append(SentenceSearchResult(sentenceIndex: index, sentence: sentence))
+            }
+        }
+        return (results, totalCount)
+    }
+
+    /// 文の中で検索語に一致するすべての範囲（強調表示に使う）
+    static func matchRanges(of query: String, in text: String) -> [Range<String.Index>] {
+        guard let query = normalizedQuery(query) else { return [] }
+        var ranges: [Range<String.Index>] = []
+        var searchStart = text.startIndex
+        while searchStart < text.endIndex,
+              let range = text.range(of: query, options: options, range: searchStart..<text.endIndex),
+              !range.isEmpty {
+            ranges.append(range)
+            searchStart = range.upperBound
+        }
+        return ranges
+    }
+}
+
 /// テキストファイルの文字コードを推定して文字列化する。
 nonisolated enum TextDecoding {
     static func decode(_ data: Data) -> String? {

@@ -15,7 +15,7 @@ import UIKit
         Window("SimpleTTS", id: "main") {
             ContentView(model: model)
                 .frame(minWidth: LayoutMetrics.windowMinWidth, minHeight: LayoutMetrics.windowMinHeight)
-                .background(PlaybackKeyForwarder().frame(width: 0, height: 0))
+                .background(PlaybackKeyForwarder { model.step(by: $0) }.frame(width: 0, height: 0))
                 // 「再生」メニューの操作対象。このウィンドウが前面にあるときだけ値が入る
                 .focusedSceneValue(\.readerModel, model)
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
@@ -99,14 +99,25 @@ struct PlaybackCommands: Commands {
     @FocusedValue(\.readerModel) private var model
 
     /// 修飾キーなしのショートカット（Space・←／→）を使えるか。
-    /// メモの編集画面や一覧を表示しているあいだは、文字入力や一覧の操作に譲る。
-    private var allowsUnmodifiedShortcuts: Bool { model?.isPresentingNotes != true }
+    /// メモの編集画面や一覧を表示しているあいだと、検索欄に入力中は、文字入力や一覧の操作に譲る。
+    private var allowsUnmodifiedShortcuts: Bool { model?.allowsPlaybackKeyShortcuts != false }
 
     private func unmodified(_ key: KeyEquivalent) -> KeyboardShortcut? {
         allowsUnmodifiedShortcuts ? KeyboardShortcut(key, modifiers: []) : nil
     }
 
     var body: some Commands {
+        // 「編集」メニューの「検索」（ヒューマンインターフェイスガイドラインの標準の位置と ⌘F）
+        CommandGroup(after: .textEditing) {
+            Menu("Find") {
+                Button("Find…") {
+                    model?.beginSearch()
+                }
+                .keyboardShortcut("f", modifiers: [.command])
+                .disabled(model?.canSearch != true || model?.isPresentingNotes == true)
+            }
+        }
+
         CommandMenu("Playback") {
             Button(model?.isPlaying == true ? LocalizedStringKey("Pause") : LocalizedStringKey("Play")) {
                 model?.togglePlayback()
@@ -163,12 +174,24 @@ struct PlaybackCommands: Commands {
 
 #if os(macOS)
 /// スライダーの矢印操作を優先し、読み上げウィンドウ内で Space をメニューに補送する。
+/// 一覧などにフォーカスがあるときの ←／→ は、前後の文への移動（`onStep`）にする。
 private struct PlaybackKeyForwarder: NSViewRepresentable {
-    func makeNSView(context: Context) -> KeyView { KeyView() }
-    func updateNSView(_ nsView: KeyView, context: Context) {}
+    /// 前後の文へ移動する（-1：前の文、1：次の文）
+    let onStep: (Int) -> Void
+
+    func makeNSView(context: Context) -> KeyView {
+        let view = KeyView()
+        view.onStep = onStep
+        return view
+    }
+
+    func updateNSView(_ nsView: KeyView, context: Context) {
+        nsView.onStep = onStep
+    }
 
     final class KeyView: NSView {
         private var monitor: Any?
+        var onStep: ((Int) -> Void)?
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
@@ -214,15 +237,28 @@ private struct PlaybackKeyForwarder: NSViewRepresentable {
                   window.attachedSheet == nil, NSApp.modalWindow == nil
             else { return false }
 
+            // 一覧（検索結果など）にフォーカスがあると、←／→ が「再生」メニューに届かず前後の文へ移動しないため、
+            // ここで移動する（一覧の ↑／↓ は行の移動に使う）。読み取り専用の文などでも同じく移動する。
+            // 文字を入力する欄（検索欄など）では、カーソルの移動に使うので渡さない。
+            if let key = event.charactersIgnoringModifiers?.unicodeScalars.first,
+               key.value == NSLeftArrowFunctionKey || key.value == NSRightArrowFunctionKey,
+               isPassiveResponder(window.firstResponder),
+               let onStep {
+                onStep(key.value == NSLeftArrowFunctionKey ? -1 : 1)
+                return true
+            }
+
             // 一覧や選択可能な読み取り専用の文は Space を消費してしまうため、メニューに渡す。
             guard event.charactersIgnoringModifiers == " ",
-                  ignoresSpace(window.firstResponder),
+                  isPassiveResponder(window.firstResponder),
                   let mainMenu = NSApp.mainMenu
             else { return false }
             return mainMenu.performKeyEquivalent(with: event)
         }
 
-        private func ignoresSpace(_ responder: NSResponder?) -> Bool {
+        /// 一覧・選択可能な読み取り専用の文・ウインドウ自身など、Space や ←／→ を文字入力や操作に使わない（あるいは消費してしまう）ものか。
+        /// 文字を入力する欄やボタンなどのコントロールは含めない。
+        private func isPassiveResponder(_ responder: NSResponder?) -> Bool {
             switch responder {
             case nil, is NSWindow, is NSTableView:
                 return true

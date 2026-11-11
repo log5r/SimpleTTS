@@ -82,7 +82,8 @@ struct ReaderModelPrivacyTests {
         try await notesRespectPrivacyAndErasure()
         try await unattachedNotesAreListedAndDeletable()
         try await legacySavesKeepPositionAndNotes()
-        print("PASS: private reading, opt-in transitions, session restore, complete erasure, lifecycle callbacks, audio cleanup races, window reopening, and sentence notes")
+        try await searchFindsAndJumpsToSentences()
+        print("PASS: private reading, opt-in transitions, session restore, complete erasure, lifecycle callbacks, audio cleanup races, window reopening, sentence notes, and sentence search")
     }
 
     private static func require(_ condition: @autoclosure () throws -> Bool, _ message: String) throws {
@@ -446,5 +447,81 @@ struct ReaderModelPrivacyTests {
         let backups = try FileManager.default.contentsOfDirectory(atPath: fixture.notesURL.deletingLastPathComponent().path)
             .filter { $0.contains(".corrupted-") }
         try require(backups.count == 1, "Corrupted notes were not quarantined")
+    }
+
+    @MainActor
+    private static func searchFindsAndJumpsToSentences() async throws {
+        let fixture = try PrivacyFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.model()
+        model.beginSearch()
+        try require(model.searchFocusRequest == 0, "Search was requested without a document")
+        model.searchQuery = "合成"
+        try require(model.isSearching && model.searchResults.isEmpty, "Search without a document returned results")
+
+        await model.openFile(at: fixture.sourceURL)
+        model.beginSearch()
+        model.beginSearch()
+        try require(model.searchFocusRequest == 2, "Repeated Find commands were ignored")
+        try await waitForSearch(model)
+        try require(model.searchResults.map(\.sentenceIndex) == [0, 1], "Opening a document did not re-run the search")
+        model.searchQuery = "  次の  "
+        try await waitForSearch(model)
+        try require(model.searchResults.map(\.sentenceIndex) == [1] && model.searchMatchCount == 1, "Partial match failed")
+        model.goToSearchResult(model.searchResults[0])
+        try require(model.currentIndex == 1, "Choosing a result did not move to the sentence")
+
+        model.searchQuery = "   "
+        try require(!model.isSearching && model.searchResults.isEmpty, "A blank query was searched")
+        model.searchQuery = "存在しない語"
+        try await waitForSearch(model)
+        try require(model.searchResults.isEmpty && model.searchMatchCount == 0, "A missing word matched")
+
+        // 入力の連続変更では最後の語だけを反映し、古い結果を選べないようにする。
+        model.searchQuery = "合成"
+        model.searchQuery = "次の"
+        try require(model.isSearchPending && model.searchResults.isEmpty, "Stale results remained selectable")
+        try await waitForSearch(model)
+        try require(model.searchResults.map(\.sentenceIndex) == [1], "An older query replaced the latest results")
+        let oldResult = model.searchResults[0]
+
+        // 大きな文書の走査中でも MainActor から入力を変更できる。文書切り替え・消去後に結果を復活させない。
+        let largeURL = fixture.root.appending(path: "large.txt")
+        try Data(String(repeating: "検索速度を確認する文章です。", count: 200_000).utf8).write(to: largeURL)
+        await model.openFile(at: largeURL)
+        model.searchQuery = "文章"
+        try await Task.sleep(for: .milliseconds(180))
+        model.searchQuery = "次の"
+        await model.openFile(at: fixture.sourceURL)
+        try await waitForSearch(model)
+        try require(model.searchResults.map(\.sentenceIndex) == [1], "Results from the previous document were published")
+
+        model.searchQuery = "合成"
+        model.searchQuery = ""
+        try await Task.sleep(for: .milliseconds(250))
+        try require(!model.isSearchPending && model.searchResults.isEmpty, "Clearing search allowed a late result")
+        model.searchQuery = "合成"
+        await model.deleteAllStoredData()
+        try await Task.sleep(for: .milliseconds(250))
+        try require(!model.isSearchPending && model.searchResults.isEmpty, "Erasure allowed a late search result")
+        model.goToSearchResult(oldResult)
+        try require(model.currentIndex == 0, "A stale result moved a closed document")
+
+        // Case and width are ignored; voiced marks are not.
+        let sentences = ["Hello World.", "ＨＥＬＬＯ again.", "ｶﾀｶﾅ と カタカナ。", "はし と ばし。"]
+        try require(SentenceSearch.search("hello", in: sentences).results.map(\.sentenceIndex) == [0, 1], "Case or width folding failed")
+        try require(SentenceSearch.matchRanges(of: "カタカナ", in: sentences[2]).count == 2, "Half-width katakana did not match")
+        try require(SentenceSearch.matchRanges(of: "ば", in: sentences[3]).count == 1, "Voiced marks were ignored")
+        let capped = SentenceSearch.search("a", in: Array(repeating: "a", count: 5), limit: 3)
+        try require(capped.results.count == 3 && capped.totalCount == 5, "Result limit was not applied")
+    }
+
+    @MainActor
+    private static func waitForSearch(_ model: ReaderModel) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while model.isSearchPending, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try require(!model.isSearchPending, "Search did not finish")
     }
 }

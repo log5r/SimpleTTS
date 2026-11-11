@@ -65,7 +65,10 @@ final class ReaderModel {
     }
 
     private(set) var document: ReaderDocument? {
-        didSet { playbackStateDidChange() }
+        didSet {
+            playbackStateDidChange()
+            updateSearchResults()
+        }
     }
     private(set) var currentIndex = 0 {
         didSet { playbackStateDidChange() }
@@ -97,6 +100,28 @@ final class ReaderModel {
     private var notesAreWritable = false
     /// 本文が変わって付け先の文が見つからなくなったメモ。読み上げ画面には出さず、一覧と書き出しにだけ含める。
     private(set) var unattachedNotes: [SentenceNote] = []
+
+    /// 検索欄に入力した語。文書を開き直しても残し、新しい文書で検索し直す。
+    var searchQuery = "" {
+        didSet {
+            if searchQuery != oldValue { updateSearchResults() }
+        }
+    }
+    /// 検索語を含む文（文書の順、最大 `SentenceSearch.resultLimit` 件）
+    private(set) var searchResults: [SentenceSearchResult] = []
+    /// 検索語を含む文の数（一覧の上限を超えた分も含む）
+    private(set) var searchMatchCount = 0
+    private(set) var isSearchPending = false
+    @ObservationIgnored private var searchTask: Task<Void, Never>?
+    @ObservationIgnored private var searchGeneration = 0
+    /// 検索欄に入力中か。入力中は修飾キーなしのショートカット（Space・←／→）を文字入力に譲る。
+    /// 画面の検索欄のフォーカスと同期する。true にすると検索欄に入力できる状態にし、false にすると検索欄から抜ける。
+    var isSearchFieldFocused = false
+    /// フォーカス状態が変わらなくても、検索コマンドのたびにサイドバーを表示する。
+    private(set) var searchFocusRequest = 0
+
+    /// 検索語が入力されているか（サイドバーにセーブ一覧の代わりに検索結果を出す）
+    var isSearching: Bool { SentenceSearch.normalizedQuery(searchQuery) != nil }
 
     /// メモ一覧に出す行（文に付いたメモと、付け先の文が見つからないメモ）
     var noteListEntries: [NoteListEntry] {
@@ -252,6 +277,11 @@ final class ReaderModel {
     var canShowNotes: Bool { !isBusy && document != nil }
     /// メモの編集画面か一覧を表示しているか。表示中はキーボードショートカットを文字入力に譲る。
     var isPresentingNotes: Bool { noteEditorRequest != nil || isNotesListPresented }
+    /// 検索は文書を開いているときのみ（読み込み中・削除中は不可）
+    var canSearch: Bool { !isBusy && document != nil }
+    /// 修飾キーなしのショートカット（Space・←／→）と ⌘←／⌘→ を使えるか。
+    /// メモの編集画面や一覧を表示しているあいだと、検索欄に入力中は文字入力や一覧の操作に譲る。
+    var allowsPlaybackKeyShortcuts: Bool { !isPresentingNotes && !isSearchFieldFocused }
 
     /// 指定した文に付けたメモ
     func note(at index: Int) -> SentenceNote? {
@@ -619,6 +649,52 @@ final class ReaderModel {
         try storage.writeNotes(DocumentNotes(documentID: document.notesID, documentTitle: document.title, notes: sorted + unattached))
         notes = sorted
         unattachedNotes = unattached
+    }
+
+    // MARK: - Search
+
+    /// 検索欄に入力できる状態にする（「検索」メニュー、⌘F）。
+    func beginSearch() {
+        guard canSearch else { return }
+        searchFocusRequest &+= 1
+    }
+
+    /// 検索結果の文へ移動する。読み上げ中ならその文から読み直す。
+    func goToSearchResult(_ result: SentenceSearchResult) {
+        guard let document, document.sentences.indices.contains(result.sentenceIndex),
+              document.sentences[result.sentenceIndex] == result.sentence else { return }
+        jump(to: result.sentenceIndex)
+    }
+
+    private func updateSearchResults() {
+        searchTask?.cancel()
+        searchTask = nil
+        searchGeneration &+= 1
+        searchResults = []
+        searchMatchCount = 0
+        isSearchPending = false
+        guard let query = SentenceSearch.normalizedQuery(searchQuery), let document else { return }
+
+        let generation = searchGeneration
+        let sentences = document.sentences
+        isSearchPending = true
+        searchTask = Task { [weak self] in
+            // 連続入力をまとめ、全文の走査は画面操作を止めないよう MainActor の外で行う。
+            do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
+            let worker = Task.detached(priority: .userInitiated) {
+                SentenceSearch.search(query, in: sentences)
+            }
+            let result = await withTaskCancellationHandler {
+                await worker.value
+            } onCancel: {
+                worker.cancel()
+            }
+            guard !Task.isCancelled, let self, self.searchGeneration == generation else { return }
+            self.searchResults = result.results
+            self.searchMatchCount = result.totalCount
+            self.isSearchPending = false
+            self.searchTask = nil
+        }
     }
 
     // MARK: - Lifecycle

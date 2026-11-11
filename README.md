@@ -49,6 +49,10 @@ Choose a text file with **Open…**, or drop it into the app. Only regular files
 
 You can move between sentences during playback. While paused, use **Save Position** to save your place or **Copy Sentence** to copy the displayed sentence. On iOS, playback can continue in the background.
 
+## Search
+
+Type a word in **Search Sentences** at the top of the sidebar, or choose **Edit > Find > Find…** (⌘F). While you type, the sidebar lists every sentence in the open document that contains the word, in document order, with the match highlighted. Matching ignores case and full-width/half-width differences (for example, `ＡＰＰＬＥ` matches `apple`), but not voiced marks (`は` does not match `ば`). Select a result to go to that sentence; during playback, reading continues from there. On macOS, use ↓ to move from the search field into the results. Clear the search field to show saved positions again. Up to 1,000 results are listed; refine the search if there are more.
+
 ## Notes
 
 Each sentence can have one note, and notes can span multiple lines. Use the note button in the top-right corner of the current sentence, or choose **Notes > Add Note…** (⇧⌘N), to add or edit the note for that sentence. The note appears below the sentence, and nearby sentences with notes show a note icon. Saving an empty note removes it.

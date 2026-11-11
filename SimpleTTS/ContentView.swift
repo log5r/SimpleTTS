@@ -55,9 +55,50 @@ private nonisolated struct ToolbarWidthClass: Equatable {
 struct ContentView: View {
     @Bindable var model: ReaderModel
     @State private var columnVisibility = NavigationSplitViewVisibility.automatic
+    @FocusState private var isSearchFieldFocused: Bool
     #if os(iOS)
     @State private var isPrivacyPresented = false
     #endif
+
+    /// サイドバー。検索語を入力しているあいだは、セーブ一覧の代わりに検索結果を出す。
+    /// 検索欄はサイドバーの上端に置く（プレビューの検索と同じ配置。ツールバーは「声」「速度」で幅を使っているため）。
+    /// - Parameter onSelect: セーブや検索結果を選んで移動したあとに呼ばれる（iPhone で読み上げ画面に戻るため）
+    private func sidebar(onSelect: @escaping () -> Void = {}) -> some View {
+        Group {
+            if model.isSearching {
+                SearchResultsList(model: model, onSelect: onSelect)
+            } else {
+                SavesSidebar(model: model, onLoad: onSelect)
+            }
+        }
+        .searchable(text: $model.searchQuery, placement: .sidebar, prompt: Text("Search Sentences"))
+        .searchFocused($isSearchFieldFocused)
+        .onChange(of: isSearchFieldFocused) { _, isFocused in
+            if model.isSearchFieldFocused != isFocused {
+                model.isSearchFieldFocused = isFocused
+            }
+        }
+    }
+
+    /// モデルから検索欄のフォーカスを変える。
+    /// - true：「検索」メニュー（⌘F）で検索欄に入力できる状態にする。サイドバーを隠していれば表示する。
+    /// - false：検索結果を選んだら検索欄から抜け、Space・←／→ で読み上げを操作できるようにする。
+    private func updateSearchFieldFocus(_ isFocused: Bool) {
+        guard isFocused else {
+            isSearchFieldFocused = false
+            return
+        }
+        #if os(iOS)
+        preferredCompactColumn = .sidebar
+        #endif
+        if columnVisibility == .detailOnly {
+            columnVisibility = .all
+        }
+        // サイドバーを表示した直後は検索欄がまだないので、次の更新でフォーカスする
+        DispatchQueue.main.async {
+            isSearchFieldFocused = true
+        }
+    }
 
     var body: some View {
         splitView
@@ -90,6 +131,12 @@ struct ContentView: View {
             }
             .sheet(isPresented: $model.isNotesListPresented) {
                 NotesListView(model: model)
+            }
+            .onChange(of: model.isSearchFieldFocused) { _, isFocused in
+                updateSearchFieldFocus(isFocused)
+            }
+            .onChange(of: model.searchFocusRequest) {
+                updateSearchFieldFocus(true)
             }
             .alert(
                 "Error",
@@ -146,8 +193,8 @@ struct ContentView: View {
 
     private var splitView: some View {
         NavigationSplitView(columnVisibility: $columnVisibility, preferredCompactColumn: $preferredCompactColumn) {
-            SavesSidebar(model: model) {
-                // セーブを読み込んだら読み上げ画面に戻る
+            sidebar {
+                // セーブを読み込んだり検索結果を選んだりしたら読み上げ画面に戻る
                 preferredCompactColumn = .detail
             }
             .navigationTitle("Saved Positions")
@@ -180,7 +227,7 @@ struct ContentView: View {
 
     private var splitView: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            SavesSidebar(model: model)
+            sidebar()
                 .navigationSplitViewColumnWidth(
                     min: LayoutMetrics.sidebarMinWidth,
                     ideal: LayoutMetrics.sidebarIdealWidth,

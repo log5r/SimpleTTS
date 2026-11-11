@@ -51,6 +51,34 @@
         }
       }
     },
+    "%lld matching sentences": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld matching sentence"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld matching sentences"
+                }
+              }
+            }
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld件の文が一致"
+          }
+        }
+      }
+    },
     "%lld notes": {
       "localizations": {
         "en": {
@@ -729,6 +757,26 @@
         }
       }
     },
+    "Find": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "検索"
+          }
+        }
+      }
+    },
+    "Find…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "検索…"
+          }
+        }
+      }
+    },
     "Finished reading, but the position could not be auto-saved: %@": {
       "localizations": {
         "ja": {
@@ -899,6 +947,16 @@
         }
       }
     },
+    "No Document Open": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文書が開かれていません"
+          }
+        }
+      }
+    },
     "No Notes": {
       "localizations": {
         "ja": {
@@ -1033,6 +1091,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "テキストファイルを開く（⌘O）"
+          }
+        }
+      }
+    },
+    "Open a text file to search its sentences.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "テキストファイルを開くと、文を検索できます。"
           }
         }
       }
@@ -1387,6 +1455,16 @@
         }
       }
     },
+    "Search Sentences": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文を検索"
+          }
+        }
+      }
+    },
     "Sentence": {
       "localizations": {
         "ja": {
@@ -1463,6 +1541,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "この文書のメモ一覧を表示（%lld件、⇧⌘L）"
+          }
+        }
+      }
+    },
+    "Showing first %lld of %lld matches": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一致した%2$lld件のうち、最初の%1$lld件を表示しています"
           }
         }
       }

@@ -370,7 +370,8 @@ private struct ControlBar: View {
                     }
                     .disabled(!model.canStepBackward)
                     // ← は「再生」メニューに割り当てている。従来の ⌘← も使えるよう残す
-                    .keyboardShortcut(.leftArrow, modifiers: [.command])
+                    // （検索欄に入力中は、行頭への移動に譲る）
+                    .keyboardShortcut(commandArrow(.leftArrow))
                     .help("Previous sentence (← or ⌘←)")
 
                     Button {
@@ -393,7 +394,7 @@ private struct ControlBar: View {
                         Label("Next", systemImage: "forward.end.fill")
                     }
                     .disabled(!model.canStepForward)
-                    .keyboardShortcut(.rightArrow, modifiers: [.command])
+                    .keyboardShortcut(commandArrow(.rightArrow))
                     .help("Next sentence (→ or ⌘→)")
                 }
                 .labelStyle(AdaptiveLabelStyle(iconOnly: widthClass == .minimal))
@@ -431,5 +432,9 @@ private struct ControlBar: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal)
         .padding(.vertical, isShort ? 6 : 12)
+    }
+
+    private func commandArrow(_ key: KeyEquivalent) -> KeyboardShortcut? {
+        model.allowsPlaybackKeyShortcuts ? KeyboardShortcut(key, modifiers: [.command]) : nil
     }
 }
