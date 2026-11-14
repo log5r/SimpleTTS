@@ -16,6 +16,8 @@ struct StorageAndImportTests {
         try testNotesStorage(in: root)
         try testNotesAttachment()
         try testNotesExport()
+        try testNotesImport(in: root)
+        try testNotesImportMatching()
         print("PASS: local text validation, size limits, encodings, storage recovery, backup exclusion, complete erasure, notes storage, and notes export")
     }
 
@@ -256,5 +258,74 @@ struct StorageAndImportTests {
         let data = NotesExport.data(for: csv)
         try require(data.starts(with: [0xEF, 0xBB, 0xBF]) && data.dropFirst(3) == Data(csv.utf8),
                     "Export must be UTF-8 with BOM")
+    }
+
+    private static func testNotesImport(in root: URL) throws {
+        let utc = TimeZone(secondsFromGMT: 0)!
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let entries = NoteListEntry.entries(attached: [
+            SentenceNote(sentenceIndex: 2, sentence: "Hello, \"world\".", text: "one\r\ntwo\nthree\tfour", updatedAt: date),
+            SentenceNote(sentenceIndex: 3, sentence: "=1", text: "@a", updatedAt: date),
+        ], unattached: [SentenceNote(sentenceIndex: 9, sentence: "消えた文。", text: "保管する", updatedAt: date)])
+        for format in NotesExport.Format.allCases {
+            for headers in [["Sentence No.", "Sentence", "Note", "Last Modified"], ["文番号", "文", "メモ", "最終更新日"]] {
+                let table = NotesExport.table(entries, format: format, headers: headers, timeZone: utc)
+                let parsed = try NotesImport.parse("\u{FEFF}" + table, format: format, timeZone: utc)
+                try require(parsed.map(\.sentence) == entries.map(\.sentence), "Sentence round trip failed")
+                try require(parsed.map(\.text) == entries.map(\.text), "Quoted or formula-prefixed notes did not round trip")
+                try require(parsed.map(\.sentenceIndex) == [2, 3, nil], "Sentence numbers did not round trip")
+                try require(parsed.allSatisfy { $0.updatedAt == date }, "Dates did not round trip")
+                let url = root.appending(path: "notes.\(format.fileExtension)")
+                try NotesExport.data(for: table).write(to: url)
+                try require(NotesImport.read(from: url).map(\.text) == entries.map(\.text), "Exported file could not be imported")
+            }
+        }
+        let reordered = try NotesImport.parse("Note,Extra,Sentence\n\"first\nsecond\",unused,文。")
+        try require(reordered.count == 1 && reordered[0].text == "first\nsecond" && reordered[0].updatedAt == nil,
+                    "Reordered or optional columns failed")
+        let minimal = root.appending(path: "minimal.csv")
+        for encoding in [String.Encoding.utf16, .shiftJIS] {
+            try "文,メモ\r\n本文。,注釈".data(using: encoding)!.write(to: minimal)
+            try require(NotesImport.read(from: minimal).first?.text == "注釈", "CSV encoding failed")
+        }
+        for csv in [
+            "Sentence,Note\n\"unclosed,note", "Sentence,Note\na\"b,note", "Sentence,Note\n\"a\"oops,note",
+            "Sentence,Sentence,Note\na,b,c", "Wrong,Columns\na,b", "Sentence,Note\n", "Sentence,Note\na,",
+            "Sentence,Note\na,note,extra", "Sentence No.,Sentence,Note\n0,a,note",
+            "Sentence No.,Sentence,Note\nno,a,note", "Sentence,Note,Last Modified\na,note,2026-02-30 12:00:00",
+        ] {
+            do {
+                _ = try NotesImport.parse(csv)
+                throw TestFailure.failed("Accepted invalid CSV: \(csv)")
+            } catch is NotesImportError {}
+        }
+    }
+
+    private static func testNotesImportMatching() throws {
+        let document = ReaderDocument(title: "matching.txt", text: "最初。重複。重複。最後。")
+        let imported = [
+            ImportedNote(id: 2, sentenceIndex: 0, sentence: "最後。", text: "moved", updatedAt: nil),
+            ImportedNote(id: 3, sentenceIndex: 0, sentence: "重複。", text: "ambiguous", updatedAt: nil),
+            ImportedNote(id: 4, sentenceIndex: 2, sentence: "重複。", text: "exact", updatedAt: nil),
+            ImportedNote(id: 5, sentenceIndex: 0, sentence: "変更前。", text: "missing", updatedAt: nil),
+        ]
+        var plan = NoteImportPlan(document: document, notes: [], unattached: [], imported: imported)
+        try require(plan.items.map(\.match) == [.moved, .ambiguous, .exact, .missing], "Text was not checked before matching")
+        try require(plan.items.map(\.targetIndex) == [3, nil, 2, nil] && !plan.canImport, "Ambiguous or missing text was guessed")
+        plan.items[1].assignment = .sentence(1)
+        plan.items[3].assignment = .skip
+        try require(plan.canImport, "Resolved plan was rejected")
+        plan.items[1].assignment = .sentence(2)
+        try require(!plan.canImport && plan.hasDuplicateTarget(plan.items[1]), "Duplicate destinations were accepted")
+        plan.items[1].assignment = .sentence(100)
+        try require(!plan.canImport, "Out-of-range destination was accepted")
+
+        let existing = SentenceNote(sentenceIndex: 3, sentence: "最後。", text: "original", updatedAt: Date())
+        var conflict = NoteImportPlan(document: document, notes: [existing], unattached: [], imported: [imported[0]])
+        try require(!conflict.canImport && conflict.needsReplacementConfirmation(conflict.items[0]), "Existing note would be silently overwritten")
+        conflict.items[0].replacesExisting = true
+        try require(conflict.canImport, "Confirmed replacement was rejected")
+        conflict.items[0].assignment = .skip
+        try require(!conflict.canImport, "All-skipped import should be disabled")
     }
 }

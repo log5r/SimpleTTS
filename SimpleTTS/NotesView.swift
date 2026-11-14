@@ -207,6 +207,9 @@ struct NotesListView: View {
     @State private var pendingDeletion: NoteListEntry?
     @State private var exportFile: NotesExportFile?
     @State private var failureMessage: String?
+    @State private var isImportPickerPresented = false
+    @State private var isReadingImport = false
+    @State private var importPlan: NoteImportPlan?
 
     private var entries: [NoteListEntry] { model.noteListEntries }
 
@@ -237,6 +240,7 @@ struct NotesListView: View {
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                 Spacer()
+                importButton
                 exportMenu
                     .fixedSize()
                 Button("Done") { dismiss() }
@@ -247,6 +251,7 @@ struct NotesListView: View {
         // 4 列の既定の幅（約 660pt）が横スクロールなしで収まる大きさにする
         .frame(minWidth: 700, idealWidth: 700, minHeight: 360, idealHeight: 480)
         .modifier(listPresentations)
+        .modifier(importPresentations)
         #else
         NavigationStack {
             content
@@ -257,11 +262,13 @@ struct NotesListView: View {
                         Button("Done") { dismiss() }
                     }
                     ToolbarItem(placement: .primaryAction) {
+                        importButton
                         exportMenu
                     }
                 }
         }
         .modifier(listPresentations)
+        .modifier(importPresentations)
         #endif
     }
 
@@ -422,6 +429,39 @@ struct NotesListView: View {
         .help("Save the notes as a CSV or TSV file")
     }
 
+    private var importButton: some View {
+        Button {
+            isImportPickerPresented = true
+        } label: {
+            if isReadingImport {
+                ProgressView().controlSize(.small)
+            } else {
+                Label("Import…", systemImage: "square.and.arrow.down")
+            }
+        }
+        .disabled(!model.canEditNotes || isReadingImport)
+        .help("Import notes from a CSV or TSV file")
+    }
+
+    private var importPresentations: some ViewModifier {
+        NotesImportPresentations(isPickerPresented: $isImportPickerPresented, plan: $importPlan, model: model) { result in
+            switch result {
+            case .success(let url):
+                isReadingImport = true
+                Task {
+                    defer { isReadingImport = false }
+                    do {
+                        importPlan = try await model.prepareNotesImport(from: url)
+                    } catch {
+                        failureMessage = String(localized: "Could not import the notes: \(error.localizedDescription)")
+                    }
+                }
+            case .failure(let error):
+                failureMessage = String(localized: "Could not import the notes: \(error.localizedDescription)")
+            }
+        }
+    }
+
     private var listPresentations: NotesListPresentations {
         NotesListPresentations(
             model: model,
@@ -445,6 +485,21 @@ struct NotesListView: View {
         #else
         UIPasteboard.general.string = text
         #endif
+    }
+}
+
+private struct NotesImportPresentations: ViewModifier {
+    @Binding var isPickerPresented: Bool
+    @Binding var plan: NoteImportPlan?
+    let model: ReaderModel
+    let onSelection: (Result<URL, Error>) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .fileImporter(isPresented: $isPickerPresented, allowedContentTypes: [.commaSeparatedText, .tabSeparatedText], onCompletion: onSelection)
+            .sheet(item: $plan) { plan in
+                NotesImportView(model: model, plan: plan)
+            }
     }
 }
 

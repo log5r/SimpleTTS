@@ -584,6 +584,45 @@ final class ReaderModel {
         return document
     }
 
+    /// ファイルの読み込み・照合はメインスレッドの外で行い、確認が終わるまで保存しない。
+    func prepareNotesImport(from url: URL) async throws -> NoteImportPlan {
+        guard let document else { throw NoteEditingError.documentClosed }
+        _ = try editableDocument(id: document.notesID)
+        let originalNotes = notes
+        let originalUnattached = unattachedNotes
+        let plan = try await Task.detached(priority: .userInitiated) {
+            let imported = try NotesImport.read(from: url)
+            return NoteImportPlan(document: document, notes: originalNotes, unattached: originalUnattached, imported: imported)
+        }.value
+        try validateNotesImport(plan)
+        return plan
+    }
+
+    private func validateNotesImport(_ plan: NoteImportPlan) throws {
+        let document = try editableDocument(id: plan.documentID)
+        guard document.id == plan.contentID, document.sentences == plan.sentences else { throw NoteEditingError.documentClosed }
+        guard notes == plan.existingNotes, unattachedNotes == plan.unattachedNotes else { throw NotesImportError.notesChanged }
+    }
+
+    /// 全行の対応先を検証してから一括保存する。保存失敗時はメモリも変更しない。
+    func importNotes(_ plan: NoteImportPlan) throws {
+        try validateNotesImport(plan)
+        guard plan.canImport else { throw NotesImportError.unresolvedAssignments }
+        let document = try editableDocument(id: plan.documentID)
+        var updated = Dictionary(uniqueKeysWithValues: notes.map { ($0.sentenceIndex, $0) })
+        let now = Date()
+        for item in plan.items {
+            guard let index = item.targetIndex else { continue }
+            guard document.sentences.indices.contains(index) else { throw NotesImportError.unresolvedAssignments }
+            // 同じ内容の再取り込みで更新日を変えない。
+            if updated[index]?.text == item.source.text { continue }
+            updated[index] = SentenceNote(sentenceIndex: index, sentence: document.sentences[index],
+                                          text: item.source.text, updatedAt: item.source.updatedAt ?? now)
+        }
+        try commitNotes(Array(updated.values), for: document)
+        statusMessage = String(localized: "Imported \(plan.selectedCount) notes.")
+    }
+
     /// メモ一覧を書き出す。見出しは表示中の言語にする。
     func exportedNotes(format: NotesExport.Format) -> Data {
         let headers = [

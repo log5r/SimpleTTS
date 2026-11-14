@@ -41,6 +41,7 @@
         }
       }
     },
+    "%lld": {},
     "%lld / %lld": {
       "localizations": {
         "ja": {
@@ -107,6 +108,26 @@
         }
       }
     },
+    "%lld notes selected": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld件のメモを選択中"
+          }
+        }
+      }
+    },
+    "%lld rows need a destination or must be skipped": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld行の対応先を選ぶか、スキップしてください"
+          }
+        }
+      }
+    },
     "Add Note": {
       "localizations": {
         "ja": {
@@ -157,6 +178,16 @@
         }
       }
     },
+    "Another imported note uses this sentence. Choose a different sentence or skip this row.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "別の取り込み行でもこの文が選択されています。ほかの文を選ぶか、この行をスキップしてください。"
+          }
+        }
+      }
+    },
     "Automatic": {
       "localizations": {
         "ja": {
@@ -173,6 +204,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "CSV（カンマ区切り）…"
+          }
+        }
+      }
+    },
+    "CSV Sentence": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSVに記録された文"
           }
         }
       }
@@ -217,6 +258,26 @@
         }
       }
     },
+    "Choose a Sentence": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "対応先を選択"
+          }
+        }
+      }
+    },
+    "Choose a Sentence…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "対応先を選択…"
+          }
+        }
+      }
+    },
     "Choose a plain text file.": {
       "localizations": {
         "ja": {
@@ -233,6 +294,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "通常のテキストファイルを選んでください。フォルダやリンクは開けません。"
+          }
+        }
+      }
+    },
+    "Choose a sentence or skip each row. Each sentence can receive one note, and replacing an existing note requires confirmation.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各行の対応先を選ぶか、スキップしてください。1つの文に取り込めるメモは1件です。既存のメモを置き換えるには確認が必要です。"
           }
         }
       }
@@ -263,6 +334,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "現在の文書を閉じ、保存した本文、履歴、メモ、復旧用の退避ファイル、生成した音声を削除します。元ファイル、書き出したファイル、クリップボードの内容、既存のバックアップは削除しません。"
+          }
+        }
+      }
+    },
+    "Confirm Replacement": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "置き換えの確認が必要"
           }
         }
       }
@@ -353,6 +434,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "メモ一覧を書き出せませんでした: %@"
+          }
+        }
+      }
+    },
+    "Could not import the notes: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモを読み込めませんでした: %@"
           }
         }
       }
@@ -657,6 +748,16 @@
         }
       }
     },
+    "Destination Sentence": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "対応先の文"
+          }
+        }
+      }
+    },
     "Document text and history: %@": {
       "localizations": {
         "ja": {
@@ -693,6 +794,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "ドラッグして別の文へ移動"
+          }
+        }
+      }
+    },
+    "Duplicate Destination": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "対応先が重複"
           }
         }
       }
@@ -747,6 +858,16 @@
         }
       }
     },
+    "Existing Note": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "既存のメモ"
+          }
+        }
+      }
+    },
     "Export": {
       "localizations": {
         "ja": {
@@ -763,6 +884,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "検索"
+          }
+        }
+      }
+    },
+    "Find a destination by text or sentence number": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本文や文番号で対応先を検索"
           }
         }
       }
@@ -867,6 +998,76 @@
         }
       }
     },
+    "Import": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み込む"
+          }
+        }
+      }
+    },
+    "Import Action": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取り込み方法"
+          }
+        }
+      }
+    },
+    "Import Notes": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモを読み込む"
+          }
+        }
+      }
+    },
+    "Import notes from a CSV or TSV file": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSVまたはTSVファイルからメモを読み込みます"
+          }
+        }
+      }
+    },
+    "Imported %lld notes.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld件のメモを読み込みました。"
+          }
+        }
+      }
+    },
+    "Imported Note": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取り込むメモ"
+          }
+        }
+      }
+    },
+    "Import…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み込み…"
+          }
+        }
+      }
+    },
     "Last Modified": {
       "localizations": {
         "ja": {
@@ -917,6 +1118,26 @@
         }
       }
     },
+    "Matching sentences are assigned automatically. Review each row, choose a destination for unmatched text, or skip it. Existing notes are replaced only with your confirmation.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本文が一致する文は自動で対応付けられます。各行を確認し、一致しない文の対応先を選ぶか、スキップしてください。既存のメモの置き換えには確認が必要です。"
+          }
+        }
+      }
+    },
+    "More than one sentence matches this text. Choose the destination.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本文が一致する文が複数あります。対応先を選んでください。"
+          }
+        }
+      }
+    },
     "Next": {
       "localizations": {
         "ja": {
@@ -957,12 +1178,32 @@
         }
       }
     },
+    "No Matching Sentences": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一致する文がありません"
+          }
+        }
+      }
+    },
     "No Notes": {
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "メモはありません"
+          }
+        }
+      }
+    },
+    "No sentence matches this text. Choose the destination.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本文が一致する文がありません。対応先を選んでください。"
           }
         }
       }
@@ -1335,12 +1576,42 @@
         }
       }
     },
+    "Replace this existing note with the imported note": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "既存のメモを取り込むメモで置き換える"
+          }
+        }
+      }
+    },
     "Restored “%@” at sentence %lld.": {
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "前回の「%@」（%lld文目）を復元しました。"
+          }
+        }
+      }
+    },
+    "Row %lld": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "行 %lld"
+          }
+        }
+      }
+    },
+    "Row %lld has missing fields, an empty sentence or note, an invalid sentence number, or an invalid date.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "行 %lld に不足している項目、空の文やメモ、無効な文番号、または無効な日付があります。"
           }
         }
       }
@@ -1465,6 +1736,16 @@
         }
       }
     },
+    "Select a Note": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモを選択してください"
+          }
+        }
+      }
+    },
     "Sentence": {
       "localizations": {
         "ja": {
@@ -1555,8 +1836,38 @@
         }
       }
     },
+    "Showing up to 200 sentences. Refine the search to find another destination.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最大200文を表示しています。ほかの文を探すには検索条件を絞ってください。"
+          }
+        }
+      }
+    },
     "SimpleTTS": {
       "shouldTranslate": false
+    },
+    "Skip This Row": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この行をスキップ"
+          }
+        }
+      }
+    },
+    "Skipped": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スキップ"
+          }
+        }
+      }
     },
     "Some data could not be deleted. Please try again.\n%@": {
       "localizations": {
@@ -1648,6 +1959,16 @@
         }
       }
     },
+    "The CSV contains an unclosed quote or an invalid quoted field.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSVに閉じられていない引用符、または引用符の使い方が不正な項目があります。"
+          }
+        }
+      }
+    },
     "The document for this note is no longer open.": {
       "localizations": {
         "ja": {
@@ -1664,6 +1985,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "文書の識別子が不正です。"
+          }
+        }
+      }
+    },
+    "The file contains no notes to import.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファイルに取り込めるメモがありません。"
+          }
+        }
+      }
+    },
+    "The file must have Sentence and Note columns. Use a CSV or TSV exported by SimpleTTS.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「文」と「メモ」の列が必要です。SimpleTTSから書き出したCSVまたはTSVファイルを使用してください。"
           }
         }
       }
@@ -1688,6 +2029,16 @@
         }
       }
     },
+    "The notes have changed since this import was opened. Cancel and import the file again.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み込みの確認中にメモが変更されました。キャンセルして、ファイルをもう一度読み込んでください。"
+          }
+        }
+      }
+    },
     "The say command failed (exit code %d). Check your voice settings.": {
       "localizations": {
         "ja": {
@@ -1708,12 +2059,32 @@
         }
       }
     },
+    "The sentence number and text match.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文番号と本文が一致しています。"
+          }
+        }
+      }
+    },
     "The text for “%@” could not be found. Open the original file again.": {
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "「%@」の本文が見つかりません。ファイルを開き直してください。"
+          }
+        }
+      }
+    },
+    "The text matches a sentence at a different position.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "別の位置にある文と本文が一致しています。"
           }
         }
       }

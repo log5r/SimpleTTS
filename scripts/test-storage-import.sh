@@ -10,6 +10,7 @@ xcrun swiftc -parse-as-library -default-isolation MainActor \
   "$PROJECT_ROOT/SimpleTTS/Models.swift" \
   "$PROJECT_ROOT/SimpleTTS/Storage.swift" \
   "$PROJECT_ROOT/SimpleTTS/Notes.swift" \
+  "$PROJECT_ROOT/SimpleTTS/NotesImport.swift" \
   "$PROJECT_ROOT/SimpleTTS/TextFileLoader.swift" \
   "$PROJECT_ROOT/Tests/StorageAndImportTests.swift" \
   -o "$TEST_BUILD_DIR/storage-import-tests"

@@ -29,7 +29,7 @@ nonisolated enum TextFileError: LocalizedError, Equatable {
 nonisolated enum TextFileLoader {
     static let maximumByteCount = 10 * 1_024 * 1_024
 
-    static func read(from url: URL) throws -> String {
+    static func read(from url: URL, allowedContentTypes: [UTType] = [.plainText], normalizingLineEndings: Bool = true) throws -> String {
         // セキュリティスコープやファイル API に渡す前に、ネットワーク URL を拒否する。
         guard url.isFileURL else { throw TextFileError.localFileRequired }
         let accessing = url.startAccessingSecurityScopedResource()
@@ -38,7 +38,7 @@ nonisolated enum TextFileLoader {
         }
 
         if !url.pathExtension.isEmpty {
-            guard let type = UTType(filenameExtension: url.pathExtension), type.conforms(to: .plainText) else {
+            guard let type = UTType(filenameExtension: url.pathExtension), allowedContentTypes.contains(where: { type.conforms(to: $0) }) else {
                 throw TextFileError.unsupportedFileType
             }
         }
@@ -79,7 +79,7 @@ nonisolated enum TextFileLoader {
             data.append(contentsOf: buffer.prefix(bytesRead))
         }
 
-        guard let decoded = TextDecoding.decode(data) else { throw TextFileError.invalidText }
+        guard let decoded = TextDecoding.decode(data, normalizingLineEndings: normalizingLineEndings) else { throw TextFileError.invalidText }
         // 他のツールが出力したテキストには、プレースホルダーの区切りなどとして NUL が紛れ込むことがある。
         // NUL は表示も読み上げもしないので取り除く。バイナリファイルは NUL 以外の制御文字も含むため、下の検査で拒否される。
         let text = removingNUL(from: decoded)

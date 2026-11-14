@@ -11,6 +11,7 @@ xcrun swiftc -parse-as-library -default-isolation MainActor -swift-version 5 \
   "$PROJECT_ROOT/SimpleTTS/Models.swift" \
   "$PROJECT_ROOT/SimpleTTS/Storage.swift" \
   "$PROJECT_ROOT/SimpleTTS/Notes.swift" \
+  "$PROJECT_ROOT/SimpleTTS/NotesImport.swift" \
   "$PROJECT_ROOT/SimpleTTS/TextFileLoader.swift" \
   "$PROJECT_ROOT/SimpleTTS/SpeechTypes.swift" \
   "$PROJECT_ROOT/SimpleTTS/SpeechPlayer.swift" \

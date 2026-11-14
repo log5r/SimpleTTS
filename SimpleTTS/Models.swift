@@ -188,7 +188,7 @@ nonisolated enum SentenceSearch {
 
 /// テキストファイルの文字コードを推定して文字列化する。
 nonisolated enum TextDecoding {
-    static func decode(_ data: Data) -> String? {
+    static func decode(_ data: Data, normalizingLineEndings: Bool = true) -> String? {
         let raw: String?
         if data.starts(with: [0xEF, 0xBB, 0xBF]) {
             raw = String(data: data.dropFirst(3), encoding: .utf8)
@@ -198,6 +198,7 @@ nonisolated enum TextDecoding {
             let candidates: [String.Encoding] = [.utf8, .shiftJIS, .japaneseEUC, .isoLatin1]
             raw = candidates.lazy.compactMap { String(data: data, encoding: $0) }.first
         }
+        guard normalizingLineEndings else { return raw }
         return raw?
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")

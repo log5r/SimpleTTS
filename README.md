@@ -61,7 +61,9 @@ Notes are stored per document and load automatically when you open the same file
 
 **Notes** in the reader header (or **Notes > Show Notes**, ⇧⌘L) lists each sentence that has a note, the note, and when it was last modified. Double-click a row to go to that sentence. Use **Export** to save the list as a CSV or TSV file (UTF-8 with a byte order mark so spreadsheet apps detect the encoding). Cells that begin with `=`, `+`, `-`, `@`, a tab, or a carriage return are prefixed with `'` so spreadsheet apps treat them as text rather than formulas.
 
-Notes can be added only while **Save Documents and History** is on.
+Use **Import…** in the notes list to bring back notes from a CSV or TSV file, including when the list is empty. English and Japanese export headers are accepted, and columns may be reordered; **Sentence** and **Note** are required, while **Sentence No.** and **Last Modified** are optional. Quoted commas, tabs, and multiline notes are supported. Sentence text is checked before assignment: an exact match at the original sentence number is used first, followed by a unique match elsewhere in the document. Missing or ambiguous sentences require you to choose a destination (search by text or sentence number, with surrounding sentences shown for context) or skip the row. Review the assignments and select **Import** to save them together. Replacing an existing note requires an explicit confirmation for that row, and two imported notes cannot be assigned to the same sentence. Skipped rows leave existing notes intact. Invalid files and failed saves do not partially import notes.
+
+Notes can be added or imported only while **Save Documents and History** is on.
 
 ## Privacy settings
 

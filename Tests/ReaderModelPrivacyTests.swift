@@ -78,6 +78,7 @@ struct ReaderModelPrivacyTests {
         try await mediaErasureWaitsForEveryWriter()
         try await mediaCacheRecreatesAfterWindowClose()
         try await notesFollowTheDocument()
+        try await csvNotesImport()
         try await notesAreIndependentPerFile()
         try await notesRespectPrivacyAndErasure()
         try await unattachedNotesAreListedAndDeletable()
@@ -88,6 +89,82 @@ struct ReaderModelPrivacyTests {
 
     private static func require(_ condition: @autoclosure () throws -> Bool, _ message: String) throws {
         guard try condition() else { throw PrivacyTestFailure.failed(message) }
+    }
+
+    @MainActor
+    private static func csvNotesImport() async throws {
+        let fixture = try PrivacyFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.model()
+        await model.openFile(at: fixture.sourceURL)
+        let document = model.document!
+        let csvURL = fixture.root.appending(path: "notes.csv")
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let entries = NoteListEntry.entries(attached: [
+            SentenceNote(sentenceIndex: 0, sentence: document.sentences[0], text: "CSVのメモ\n二行目", updatedAt: date),
+        ], unattached: [SentenceNote(sentenceIndex: 8, sentence: "古い文。", text: "対応先を選ぶ", updatedAt: date)])
+        try NotesExport.data(for: NotesExport.table(entries, format: .csv,
+            headers: ["文番号", "文", "メモ", "最終更新日"])).write(to: csvURL)
+        var plan = try await model.prepareNotesImport(from: csvURL)
+        try require(model.notes.isEmpty && !FileManager.default.fileExists(atPath: fixture.notesURL.path), "Preparing an import wrote notes")
+        do {
+            try model.importNotes(plan)
+            throw PrivacyTestFailure.failed("Unresolved import succeeded")
+        } catch NotesImportError.unresolvedAssignments {}
+        try require(model.notes.isEmpty, "Unresolved import partially saved")
+        plan.items[1].assignment = .sentence(1)
+        try model.importNotes(plan)
+        try require(model.notes.map(\.text) == ["CSVのメモ\n二行目", "対応先を選ぶ"], "Resolved import did not save")
+        try require(model.notes[1].sentence == document.sentences[1] && model.notes.allSatisfy { $0.updatedAt == date },
+                    "Manual mapping did not use the destination text or preserve dates")
+        let reloaded = fixture.model()
+        await reloaded.openFile(at: fixture.sourceURL)
+        try require(reloaded.notes == model.notes, "Imported notes did not persist")
+        let stale = try await model.prepareNotesImport(from: csvURL)
+        try model.saveNote("edited", for: model.makeNoteEditorRequest(at: 0)!)
+        do {
+            try model.importNotes(stale)
+            throw PrivacyTestFailure.failed("Stale import overwrote edits")
+        } catch NotesImportError.notesChanged {}
+        var replacement = try await model.prepareNotesImport(from: csvURL)
+        replacement.items[1].assignment = .skip
+        do {
+            try model.importNotes(replacement)
+            throw PrivacyTestFailure.failed("Existing note was replaced without confirmation")
+        } catch NotesImportError.unresolvedAssignments {}
+        replacement.items[0].replacesExisting = true
+        try model.importNotes(replacement)
+        try require(model.notes[0].text == entries[0].text && model.notes[1].text == "対応先を選ぶ", "Replacement or skip lost notes")
+
+        // 保存先が書き込めなければ、メモリにも部分的な変更を反映しない。
+        var failing = try await model.prepareNotesImport(from: csvURL)
+        failing.items[0].assignment = .skip
+        failing.items[1].assignment = .sentence(0)
+        failing.items[1].replacesExisting = true
+        let before = model.notes
+        let notesFolder = fixture.notesURL.deletingLastPathComponent()
+        try FileManager.default.removeItem(at: notesFolder)
+        try Data("blocks notes directory".utf8).write(to: notesFolder)
+        do {
+            try model.importNotes(failing)
+            throw PrivacyTestFailure.failed("Import reported success after a storage failure")
+        } catch is PrivacyTestFailure { throw PrivacyTestFailure.failed("Import did not fail on storage error") }
+          catch {}
+        try require(model.notes == before, "Failed import changed notes in memory")
+        try FileManager.default.removeItem(at: notesFolder)
+
+        let other = fixture.root.appending(path: "other.txt")
+        try Data(fixture.text.utf8).write(to: other)
+        await model.openFile(at: other)
+        do {
+            try model.importNotes(replacement)
+            throw PrivacyTestFailure.failed("Import was saved to another file with identical text")
+        } catch NoteEditingError.documentClosed {}
+        model.retainsDocuments = false
+        do {
+            _ = try await model.prepareNotesImport(from: csvURL)
+            throw PrivacyTestFailure.failed("Private reading enabled import")
+        } catch NoteEditingError.notEditable {}
     }
 
     @MainActor
