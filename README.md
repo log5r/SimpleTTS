@@ -1,5 +1,7 @@
 # SimpleTTS
 
+[English](README.md) | [日本語](README.ja.md)
+
 A text-to-speech app for macOS, iPhone, and iPad. It uses system voices and supports sentence-by-sentence playback, moving between sentences, playback speeds from 0.5× to 2.0×, saved reading positions, and notes on individual sentences.
 
 ## Requirements
