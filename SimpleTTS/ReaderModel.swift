@@ -78,6 +78,8 @@ final class ReaderModel {
     }
     private(set) var saves: [SavePoint] = []
     private(set) var voices: [SpeechVoice] = []
+    /// 選択中の設定ではなく、現在再生している音声ファイルに使われた声。
+    private(set) var currentVoiceName: String?
     private(set) var statusMessage: String?
     private(set) var isLoading = false {
         didSet { playbackStateDidChange() }
@@ -200,6 +202,9 @@ final class ReaderModel {
         storedRetainsDocuments = defaults.object(forKey: DefaultsKey.retainsDocuments) as? Bool ?? true
         storedShowsDocumentNameOnLockScreen = defaults.bool(forKey: DefaultsKey.showsDocumentNameOnLockScreen)
         speaker.playbackRate = Float(storedRate)
+        speaker.onVoiceChange = { [weak self] name in
+            self?.currentVoiceName = name
+        }
 
         do {
             saves = try storage.loadSaves()

@@ -51,6 +51,8 @@ Choose a text file with **Open…**, or drop it into the app. Only regular files
 
 You can move between sentences during playback. While paused, use **Save Position** to save your place or **Copy Sentence** to copy the displayed sentence. On iOS, playback can continue in the background.
 
+During playback, **Reading voice** below the position slider shows the voice used to synthesize the current sentence, including when **System Default** is selected. Changing the voice takes effect from the next sentence. If the system does not expose a recognizable voice name, the display shows **Unknown**.
+
 ## Search
 
 Type a word in **Search Sentences** at the top of the sidebar, or choose **Edit > Find > Find…** (⌘F). While you type, the sidebar lists every sentence in the open document that contains the word, in document order, with the match highlighted. Matching ignores case and full-width/half-width differences (for example, `ＡＰＰＬＥ` matches `apple`), but not voiced marks (`は` does not match `ば`). Select a result to go to that sentence; during playback, reading continues from there. On macOS, use ↓ to move from the search field into the results. Clear the search field to show saved positions again. Up to 1,000 results are listed; refine the search if there are more.
@@ -96,6 +98,7 @@ Run the storage, file import, notes, and privacy regression tests on macOS:
 ```sh
 ./scripts/test-storage-import.sh
 ./scripts/test-reader-privacy.sh
+./scripts/test-speech-voices.sh
 ```
 
 The tests use synthetic data in temporary directories and an isolated preferences domain. They do not modify normal app data or play audio.

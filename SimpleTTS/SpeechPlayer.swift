@@ -38,7 +38,14 @@ final class SpeechPlayer {
     }
 
     /// 合成済み（または合成中）のファイル。現在の文と先読みした次の文だけを保持する。
-    private var synthesisTasks: [SpeechRequest: Task<URL, Error>] = [:]
+    private var synthesisTasks: [SpeechRequest: Task<SynthesizedAudio, Error>] = [:]
+    private nonisolated struct SynthesizedAudio: Sendable {
+        let url: URL
+        let voiceName: String?
+    }
+
+    /// 合成済みファイルに使われた声。先読み時には通知せず、その文を再生するときに通知する。
+    var onVoiceChange: ((String?) -> Void)?
     /// キャッシュから外したあとも、合成の終了とファイル削除を待っている処理。
     private var retiringSynthesisTasks: [UUID: Task<Void, Never>] = [:]
     private var temporaryFilesCleanup: Task<Void, Error>?
@@ -88,6 +95,7 @@ final class SpeechPlayer {
         let token: Int
         let request: SpeechRequest
         var fileURL: URL?
+        var voiceName: String?
         let onFinish: (Result<Void, Error>) -> Void
     }
 
@@ -150,13 +158,14 @@ final class SpeechPlayer {
         generation &+= 1
         let token = generation
         let request = SpeechRequest(text: text, voice: voice)
-        current = Utterance(token: token, request: request, fileURL: nil, onFinish: onFinish)
+        current = Utterance(token: token, request: request, fileURL: nil, voiceName: nil, onFinish: onFinish)
+        onVoiceChange?(nil)
 
         let synthesis = synthesisTask(for: request)
         discardSynthesisTasks(except: [request])
 
         Task { [weak self] in
-            var result: Result<URL, Error>
+            var result: Result<SynthesizedAudio, Error>
             do {
                 result = .success(try await synthesis.value)
             } catch {
@@ -180,8 +189,9 @@ final class SpeechPlayer {
             }
             #endif
             switch result {
-            case let .success(url):
-                utterance.fileURL = url
+            case let .success(audio):
+                utterance.fileURL = audio.url
+                utterance.voiceName = audio.voiceName
                 self.current = utterance
                 self.play(utterance)
             case let .failure(error):
@@ -206,6 +216,7 @@ final class SpeechPlayer {
 
     /// 再生を止める。合成済みのファイルは再開に備えて残す。
     func stop() {
+        onVoiceChange?(nil)
         interruptCurrent()
         generation &+= 1
         let token = generation
@@ -268,7 +279,7 @@ final class SpeechPlayer {
 
     // MARK: - Synthesis cache
 
-    private func synthesisTask(for request: SpeechRequest) -> Task<URL, Error> {
+    private func synthesisTask(for request: SpeechRequest) -> Task<SynthesizedAudio, Error> {
         if let existing = synthesisTasks[request] {
             return existing
         }
@@ -277,8 +288,8 @@ final class SpeechPlayer {
             try Task.checkCancellation()
             // ウィンドウを閉じた後も同じプレイヤーを使う場合、終了処理が消した保存先を作り直す。
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try await SpeechSynthesizer.synthesize(request, to: url)
-            return url
+            let voiceName = try await SpeechSynthesizer.synthesize(request, to: url)
+            return SynthesizedAudio(url: url, voiceName: voiceName)
         }
         synthesisTasks[request] = task
         // 失敗した合成はキャッシュに残さない（残すと同じ文の再生が合成し直されずに失敗し続ける）
@@ -298,8 +309,8 @@ final class SpeechPlayer {
             let identifier = UUID()
             let cleanup = Task.detached(priority: .utility) {
                 // 合成済みなら URL が返るので削除する。キャンセル・失敗時は synthesize 側が削除している。
-                if let url = try? await task.value {
-                    try? FileManager.default.removeItem(at: url)
+                if let audio = try? await task.value {
+                    try? FileManager.default.removeItem(at: audio.url)
                 }
             }
             retiringSynthesisTasks[identifier] = cleanup
@@ -329,6 +340,7 @@ final class SpeechPlayer {
         }
 
         let token = utterance.token
+        onVoiceChange?(utterance.voiceName ?? String(localized: "Unknown"))
         playbackAttempt &+= 1
         let attempt = playbackAttempt
         scheduleSilence(duration: silenceDuration(for: pendingGap))

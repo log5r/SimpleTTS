@@ -1566,6 +1566,26 @@
         }
       }
     },
+    "Reading voice: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み上げ音声：%@"
+          }
+        }
+      }
+    },
+    "Reading voice: Checking…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み上げ音声：確認中…"
+          }
+        }
+      }
+    },
     "Ready to resume at sentence %lld.": {
       "localizations": {
         "ja": {
@@ -2115,6 +2135,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "この文はファイルに見つからなくなりました。メモは残してあるので、確認・書き出し・削除ができます。"
+          }
+        }
+      }
+    },
+    "Unknown": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不明"
           }
         }
       }

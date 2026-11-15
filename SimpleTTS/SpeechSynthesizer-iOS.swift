@@ -75,14 +75,13 @@ nonisolated enum SpeechSynthesizer {
     /// `request` を `url` に 48 kHz / Float32 / モノラルの WAV として合成する。
     /// タスクがキャンセルされたら合成を止め、`CancellationError` を投げる。
     /// 失敗時・キャンセル時は `url` のファイルを残さない。
-    static func synthesize(_ request: SpeechRequest, to url: URL) async throws {
+    static func synthesize(_ request: SpeechRequest, to url: URL) async throws -> String? {
         let utterance = AVSpeechUtterance(string: request.text)
-        if let identifier = request.voice, !identifier.isEmpty {
-            guard let voice = await voice(withIdentifier: identifier) else {
-                throw SpeechSynthesisError.voiceUnavailable
-            }
-            utterance.voice = voice
+        // 既定の場合も実体を取得し、表示名と合成に同じ声を使う。
+        guard let voice = await voice(withIdentifier: request.voice) else {
+            throw SpeechSynthesisError.voiceUnavailable
         }
+        utterance.voice = voice
         // 速度は再生側（SpeechPlayer）で変えるので、合成は常に声の標準の速さで行う。
         // 文の前後の間も再生側で入れる。
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
@@ -93,6 +92,7 @@ nonisolated enum SpeechSynthesizer {
             let buffers = try await BufferCollector.collect(utterance)
             try Task.checkCancellation()
             try writeResampled(buffers, to: url)
+            return utterance.voice.map { displayName(of: $0) }
         } catch {
             try? FileManager.default.removeItem(at: url)
             throw error
@@ -100,10 +100,16 @@ nonisolated enum SpeechSynthesizer {
     }
 
     /// 声を探す処理も `speechVoices()` と同じく内部で同期的に待つので、GCD のキューで行う。
-    private static func voice(withIdentifier identifier: String) async -> AVSpeechSynthesisVoice? {
+    private static func voice(withIdentifier identifier: String?) async -> AVSpeechSynthesisVoice? {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(returning: AVSpeechSynthesisVoice(identifier: identifier))
+                let voice: AVSpeechSynthesisVoice?
+                if let identifier, !identifier.isEmpty {
+                    voice = AVSpeechSynthesisVoice(identifier: identifier)
+                } else {
+                    voice = AVSpeechSynthesisVoice(language: nil)
+                }
+                continuation.resume(returning: voice)
             }
         }
     }

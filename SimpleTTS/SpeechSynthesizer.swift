@@ -1,10 +1,50 @@
 #if os(macOS)
 import AVFoundation
+import AppKit
 import Foundation
 
 /// macOS 標準コマンド `/usr/bin/say` に関するユーティリティ
 nonisolated enum SayCommand {
     static let executableURL = URL(fileURLWithPath: "/usr/bin/say")
+
+    /// `say` の既定の声。新しいニューラル音声では AppKit の ID が空になるため、
+    /// その場合だけ「読み上げコンテンツ」の設定を参照する。AVFoundation の既定声とは一致しない。
+    static func defaultVoiceName() -> String? {
+        let identifier = NSSpeechSynthesizer.defaultVoice
+        if !identifier.rawValue.isEmpty {
+            return NSSpeechSynthesizer.attributes(forVoice: identifier)[.name] as? String
+        }
+        let selections = CFPreferencesCopyAppValue(
+            "SpokenContentDefaultVoiceSelectionsByLanguage" as CFString,
+            "com.apple.Accessibility" as CFString
+        ) as? [Any] ?? []
+        return configuredVoiceName(in: selections, preferredLanguages: Locale.preferredLanguages)
+    }
+
+    /// この設定の形式は公開 API ではない。解釈できない場合は推測せず nil を返す。
+    static func configuredVoiceName(in selections: [Any], preferredLanguages: [String]) -> String? {
+        let voices = selections.compactMap { $0 as? [String: Any] }
+        for language in preferredLanguages {
+            let base = language.split(whereSeparator: { $0 == "-" || $0 == "_" }).first.map(String.init)
+            guard let selection = voices.first(where: { ($0["boundLanguage"] as? String) == language })
+                ?? voices.first(where: { ($0["boundLanguage"] as? String) == base }),
+                  let identifier = selection["voiceId"] as? String else { continue }
+            if let voice = AVSpeechSynthesisVoice(identifier: identifier) { return voice.name }
+            // say の一覧にも AVFoundation にも出ない Gryphon 音声の識別子。
+            let pattern = #"^com\.apple\.ttsbundle\.gryphon-neural_(.+)_[a-z]{2,3}-[A-Z]{2}_(premium|enhanced|compact)$"#
+            guard let regex = try? NSRegularExpression(pattern: pattern),
+                  let match = regex.firstMatch(in: identifier, range: NSRange(identifier.startIndex..., in: identifier)),
+                  let range = Range(match.range(at: 1), in: identifier),
+                  let qualityRange = Range(match.range(at: 2), in: identifier) else { return nil }
+            let name = String(identifier[range])
+            switch identifier[qualityRange] {
+            case "premium": return String(localized: "\(name) Premium")
+            case "enhanced": return String(localized: "\(name) Enhanced")
+            default: return name
+            }
+        }
+        return nil
+    }
 
     /// インストール済みの音声一覧を取得する（日本語音声を先頭に並べる）。
     static func availableVoices() async -> [SpeechVoice] {
@@ -83,7 +123,9 @@ nonisolated enum SpeechSynthesizer {
     /// `request` を `url` に 48 kHz / Float32 / モノラルの WAV として合成する。
     /// タスクがキャンセルされたら `say` を終了し、`CancellationError` を投げる。
     /// 失敗時・キャンセル時は `url` のファイルを残さない。
-    static func synthesize(_ request: SpeechRequest, to url: URL) async throws {
+    static func synthesize(_ request: SpeechRequest, to url: URL) async throws -> String? {
+        // 合成時点の名前をファイルと一緒に保持する（先読み後に設定が変わっても表示を変えない）。
+        let voiceName = request.voice.flatMap { $0.isEmpty ? nil : $0 } ?? SayCommand.defaultVoiceName()
         var arguments: [String] = []
         if let voice = request.voice, !voice.isEmpty {
             arguments += ["-v", voice]
@@ -109,6 +151,7 @@ nonisolated enum SpeechSynthesizer {
             } catch {
                 throw SpeechSynthesisError.unreadableOutput(underlying: error)
             }
+            return voiceName
         } catch {
             // 途中で終了した say が書きかけのファイルを残していても、失敗・キャンセル時は必ず消す
             try? FileManager.default.removeItem(at: url)

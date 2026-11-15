@@ -131,6 +131,18 @@ struct ReaderView: View {
                 .fixedSize()
             }
             positionSlider
+            // 再生前から高さを確保し、声名の表示で本文や操作列が上下に動かないようにする。
+            Text(model.isPlaying
+                 ? model.currentVoiceName.map { String(localized: "Reading voice: \($0)") }
+                    ?? String(localized: "Reading voice: Checking…")
+                 : " ")
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .help(model.currentVoiceName ?? "")
+                .accessibilityHidden(!model.isPlaying)
             if !model.savesCurrentDocument {
                 Label("This document and its history will not be saved", systemImage: "eye.slash")
                     .font(.caption)

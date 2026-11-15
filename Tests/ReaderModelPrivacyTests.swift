@@ -21,9 +21,10 @@ nonisolated enum SpeechSynthesizer {
 
     static func availableVoices() async -> [SpeechVoice] { [] }
 
-    static func synthesize(_ request: SpeechRequest, to url: URL) async throws {
+    static func synthesize(_ request: SpeechRequest, to url: URL) async throws -> String? {
         await gate.wait(request.text)
         try Data("synthetic audio fixture".utf8).write(to: url)
+        return request.voice ?? "Synthetic Default"
     }
 }
 
