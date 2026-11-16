@@ -96,6 +96,8 @@ final class ReaderModel {
     private(set) var notes: [SentenceNote] = []
     /// メモを編集する画面に渡す内容。nil でないあいだ編集画面を表示する。
     var noteEditorRequest: NoteEditorRequest?
+    /// 編集画面に入力中の内容。終了時に保存を確認するために使い、画面の表示には使わない。
+    @ObservationIgnored private var noteDraft: (request: NoteEditorRequest, text: String)?
     /// メモ一覧を表示しているか
     var isNotesListPresented = false
     /// 開いている文書のメモを読み込めたか。読み込めず退避もできなかった場合は、上書きしないよう編集を止める。
@@ -530,6 +532,28 @@ final class ReaderModel {
             text: existing?.text ?? "",
             updatedAt: existing?.updatedAt
         )
+    }
+
+    /// 編集画面の入力内容を記録する。
+    func updateNoteDraft(_ text: String, for request: NoteEditorRequest) {
+        noteDraft = (request, text)
+    }
+
+    /// 編集画面に入力したまま保存していないメモ。終了すると失われる内容がなければ nil。
+    /// 既存のメモを空にした（削除しようとしている）場合は、終了しても元のメモが残るだけなので含めない。
+    var unsavedNoteDraft: (request: NoteEditorRequest, text: String)? {
+        guard let noteDraft, let request = noteEditorRequest, noteDraft.request == request else { return nil }
+        let trimmed = noteDraft.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != request.text else { return nil }
+        return noteDraft
+    }
+
+    /// 保存していないメモを保存して、編集画面を閉じる。
+    func saveUnsavedNoteDraft() throws {
+        guard let draft = unsavedNoteDraft else { return }
+        try saveNote(draft.text, for: draft.request)
+        noteEditorRequest = nil
+        noteDraft = nil
     }
 
     /// メモを保存する。前後の空白と改行だけになったメモは削除する。

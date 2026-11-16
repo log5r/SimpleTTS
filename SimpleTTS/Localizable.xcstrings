@@ -758,6 +758,16 @@
         }
       }
     },
+    "Do you want to save the note for sentence %lld before quitting?": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "終了する前に、%lld文目のメモを保存しますか？"
+          }
+        }
+      }
+    },
     "Document text and history: %@": {
       "localizations": {
         "ja": {
@@ -774,6 +784,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "本文と履歴は端末内に保存します。サーバーへのアップロードは行わず、保存フォルダはシステムのバックアップ対象から除外します。"
+          }
+        }
+      }
+    },
+    "Don't Save": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存しない"
           }
         }
       }
@@ -2215,6 +2235,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "セーブは最大%lld件までです。不要なセーブを削除してください。"
+          }
+        }
+      }
+    },
+    "Your changes will be lost if you don't save them.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存しないと、変更内容は失われます。"
           }
         }
       }

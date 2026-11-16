@@ -8,7 +8,8 @@ usage() {
 
 スクリプトと同じフォルダのXcodeプロジェクトをReleaseビルドし、
 ~/Applicationsへ配置します。アプリは起動しません。
-同じBundle IDのアプリが起動中なら、配置直前に強制終了します。
+配置先のアプリが起動中なら、配置直前に通常の方法で終了を求めます
+（保存されていない作業がある場合などで終了しなければ、配置を中止します）。
 
   --project PATH        .xcodeprojを指定
   --workspace PATH      .xcworkspaceを指定（--schemeも指定してください）
@@ -181,35 +182,48 @@ check_destination() {
   fi
 }
 
-terminate_running_apps() {
+quit_installed_app() {
   local result
-  # Match the bundle ID rather than the executable name, including all instances.
-  if ! result="$(/usr/bin/osascript -l JavaScript - "$bundle_id" <<'JXA'
+  # Ask only instances launched from the installed bundle to quit, as Command-Q would.
+  # A normal quit lets the app run its termination handlers (autosave, cleanup), and
+  # the app may cancel it; forced termination would skip both and lose unsaved state.
+  # Copies running from elsewhere (e.g. Xcode's build folder) are left alone.
+  if ! result="$(/usr/bin/osascript -l JavaScript - "$bundle_id" "$installed_app" <<'JXA'
 ObjC.import('AppKit');
 function run(argv) {
-  var apps = $.NSRunningApplication.runningApplicationsWithBundleIdentifier(argv[0]);
-  if (Number(apps.count) === 0) return 'not-running';
-  for (var i = 0; i < apps.count; i++) {
-    var app = apps.objectAtIndex(i);
-    if (!app.terminated) app.forceTerminate;
-  }
-  // Termination is asynchronous; AppKit needs the run loop to refresh its state.
-  var deadline = $.NSDate.dateWithTimeIntervalSinceNow(5);
-  while ($.NSRunningApplication.runningApplicationsWithBundleIdentifier(argv[0]).count > 0) {
-    if (deadline.timeIntervalSinceNow <= 0) {
-      throw new Error('アプリの強制終了がタイムアウトしました: ' + argv[0]);
+  var target = $.NSURL.fileURLWithPath(argv[1]).URLByResolvingSymlinksInPath.path.js;
+  function instances() {
+    var apps = $.NSRunningApplication.runningApplicationsWithBundleIdentifier(argv[0]);
+    var found = [];
+    for (var i = 0; i < Number(apps.count); i++) {
+      var app = apps.objectAtIndex(i);
+      var url = app.bundleURL;
+      if (!app.terminated && !url.isNil() && url.URLByResolvingSymlinksInPath.path.js === target) {
+        found.push(app);
+      }
     }
+    return found;
+  }
+  var apps = instances();
+  if (apps.length === 0) return 'not-running';
+  apps.forEach(function (app) { app.terminate; });
+  // Termination is asynchronous; AppKit needs the run loop to refresh its state.
+  var deadline = $.NSDate.dateWithTimeIntervalSinceNow(15);
+  while (instances().length > 0) {
+    if (deadline.timeIntervalSinceNow <= 0) return 'still-running';
     $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.1));
   }
-  return 'terminated';
+  return 'quit';
 }
 JXA
 )"; then
-    fail "アプリを強制終了できませんでした: $bundle_id"
+    fail "起動中のアプリを確認できませんでした: $bundle_id"
   fi
-  if [[ "$result" == terminated ]]; then
-    printf '起動中のアプリを強制終了しました: %s\n' "$bundle_id"
-  fi
+  case "$result" in
+    quit) printf '起動中のアプリを終了しました: %s\n' "$installed_app" ;;
+    not-running) ;;
+    *) fail "アプリが終了しませんでした。作業内容を保存してアプリを終了してから再実行してください: $installed_app" ;;
+  esac
 }
 check_destination
 stage="$(mktemp -d "$destination/.install-app.XXXXXX")"
@@ -217,7 +231,7 @@ mkdir -- "$stage/new"
 /usr/bin/ditto "$source_app" "$stage/new/$(basename -- "$source_app")"
 validate_app "$stage/new/$(basename -- "$source_app")"
 check_destination
-terminate_running_apps
+quit_installed_app
 if [[ -e "$installed_app" ]]; then
   mv -- "$installed_app" "$stage/previous.app"
 fi

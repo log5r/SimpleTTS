@@ -8,6 +8,9 @@ import UIKit
 
 @main struct MyApp: App {
     @State private var model = ReaderModel()
+    #if os(macOS)
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    #endif
 
     var body: some Scene {
         #if os(macOS)
@@ -18,6 +21,7 @@ import UIKit
                 .background(PlaybackKeyForwarder { model.step(by: $0) }.frame(width: 0, height: 0))
                 // 「再生」メニューの操作対象。このウィンドウが前面にあるときだけ値が入る
                 .focusedSceneValue(\.readerModel, model)
+                .onAppear { appDelegate.model = model }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
                     model.prepareForTermination()
                 }
@@ -57,12 +61,76 @@ import UIKit
                 model.isImporterPresented = true
             }
             .keyboardShortcut("o", modifiers: [.command])
-            .disabled(model.isBusy)
+            // 別の文書を開くとメモの編集画面が閉じ、入力中のメモが失われるため、表示中は開かない
+            .disabled(model.isBusy || model.isPresentingNotes)
         }
     }
 }
 
 #if os(macOS)
+/// 保存していないメモがあるときに、終了する前に保存するか確かめる
+/// （書類を扱うアプリが未保存の書類について確かめるのと同じ形にする）。
+/// 確かめないと、⌘Q やログアウトで入力中のメモが失われる。
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    weak var model: ReaderModel?
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let model, let draft = model.unsavedNoteDraft else { return .terminateNow }
+
+        let alert = NSAlert()
+        alert.messageText = String(localized: "Do you want to save the note for sentence \(draft.request.sentenceIndex + 1) before quitting?")
+        alert.informativeText = String(localized: "Your changes will be lost if you don't save them.")
+        alert.addButton(withTitle: String(localized: "Save"))
+        alert.addButton(withTitle: String(localized: "Cancel")).keyEquivalent = "\u{1b}"
+        let dontSave = alert.addButton(withTitle: String(localized: "Don't Save"))
+        dontSave.keyEquivalent = "d"
+        dontSave.keyEquivalentModifierMask = .command
+
+        // 編集画面（シート）に重ねて表示し、どのメモについての確認か分かるようにする
+        let editor = sender.windows.lazy.compactMap(\.attachedSheet).first(where: \.isVisible)
+        present(alert, on: editor) { [weak self] response in
+            self?.finishTermination(sender, response: response, model: model, editor: editor)
+        }
+        return .terminateLater
+    }
+
+    private func finishTermination(
+        _ sender: NSApplication,
+        response: NSApplication.ModalResponse,
+        model: ReaderModel,
+        editor: NSWindow?
+    ) {
+        switch response {
+        case .alertFirstButtonReturn:
+            do {
+                try model.saveUnsavedNoteDraft()
+                sender.reply(toApplicationShouldTerminate: true)
+            } catch {
+                let failure = NSAlert()
+                failure.alertStyle = .warning
+                failure.messageText = String(localized: "Could not save the note: \(error.localizedDescription)")
+                present(failure, on: editor) { _ in
+                    sender.reply(toApplicationShouldTerminate: false)
+                }
+            }
+        case .alertThirdButtonReturn:
+            sender.reply(toApplicationShouldTerminate: true)
+        default:
+            sender.reply(toApplicationShouldTerminate: false)
+        }
+    }
+
+    private func present(_ alert: NSAlert, on window: NSWindow?, completion: @escaping (NSApplication.ModalResponse) -> Void) {
+        NSApp.activate()
+        if let window {
+            window.sheetParent?.makeKeyAndOrderFront(nil)
+            alert.beginSheetModal(for: window, completionHandler: completion)
+        } else {
+            completion(alert.runModal())
+        }
+    }
+}
 /// 「ウインドウ」メニューに置く、読み上げウィンドウを開く項目。
 /// 設定ウィンドウを開いたまま読み上げウィンドウを閉じると、Dock のアイコンを押しても開き直せない
 /// （表示中のウィンドウがあると reopen でウィンドウが作られない）。ミュージックなどと同じく ⌘0 で開けるようにする。

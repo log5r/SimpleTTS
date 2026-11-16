@@ -63,6 +63,7 @@ struct NoteEditorView: View {
         .frame(minWidth: 460, idealWidth: 520, minHeight: 360, idealHeight: 400)
         .modifier(deletionDialog)
         .onAppear { isEditorFocused = true }
+        .onChange(of: text, initial: true) { model.updateNoteDraft(text, for: request) }
         #else
         NavigationStack {
             Form {
@@ -98,8 +99,18 @@ struct NoteEditorView: View {
         }
         .modifier(deletionDialog)
         .onAppear { isEditorFocused = true }
+        // 入力したメモを、下にスワイプする操作で誤って捨てないようにする（「キャンセル」では閉じられる）
+        .interactiveDismissDisabled(hasUnsavedText)
         #endif
     }
+
+    #if os(iOS)
+    /// 閉じると失われる入力があるか（`ReaderModel.unsavedNoteDraft` と同じ基準）
+    private var hasUnsavedText: Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmed.isEmpty && trimmed != request.text
+    }
+    #endif
 
     private var sentence: some View {
         ScrollView {

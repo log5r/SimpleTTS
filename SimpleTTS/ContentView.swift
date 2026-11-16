@@ -122,7 +122,8 @@ struct ContentView: View {
                 }
             }
             .dropDestination(for: URL.self) { urls, _ in
-                guard !model.isBusy, let url = urls.first, url.isFileURL else { return false }
+                // メモの編集画面・一覧の表示中は開かない（開くと画面が閉じ、入力中のメモが失われる）
+                guard !model.isBusy, !model.isPresentingNotes, let url = urls.first, url.isFileURL else { return false }
                 Task { await model.openFile(at: url) }
                 return true
             }
