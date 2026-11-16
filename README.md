@@ -93,12 +93,13 @@ Publishing the Git repository also publishes its commit history. Do not ZIP the 
 
 ## Tests
 
-Run the storage, file import, notes, and privacy regression tests on macOS:
+Run the storage, file import, notes, privacy, and fold layout regression tests on macOS:
 
 ```sh
 ./scripts/test-storage-import.sh
 ./scripts/test-reader-privacy.sh
 ./scripts/test-speech-voices.sh
+./scripts/test-fold-split.sh
 ```
 
 The tests use synthetic data in temporary directories and an isolated preferences domain. They do not modify normal app data or play audio.

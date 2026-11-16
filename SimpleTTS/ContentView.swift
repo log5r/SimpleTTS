@@ -313,7 +313,7 @@ private struct SpeechToolbarControls: View {
                     Label("Speech Settings", systemImage: "slider.horizontal.3")
                 }
                 .help("Voice and speed (currently \(model.selectedVoiceName ?? String(localized: "System Default")), \(rateText))")
-                .popover(isPresented: $isPopoverPresented, arrowEdge: .bottom) {
+                .popover(isPresented: $isPopoverPresented, arrowEdge: Self.popoverArrowEdge) {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Voice")
                             .font(.headline)
@@ -342,6 +342,15 @@ private struct SpeechToolbarControls: View {
             }
         }
     }
+
+    /// macOS ではツールバーのボタンの下に出す。
+    /// iOS ではシステムに任せる。iPhone Duo の外側の画面ではツールバーが画面の端に縦に並ぶ（縦のバー）ため、
+    /// 矢印の向きを固定すると、縦のバーに合った向き（ボタンの横）を選べなくなる。
+    #if os(macOS)
+    private static let popoverArrowEdge: Edge? = .bottom
+    #else
+    private static let popoverArrowEdge: Edge? = nil
+    #endif
 
     private var voicePicker: some View {
         Picker("Voice", selection: $model.selectedVoice) {

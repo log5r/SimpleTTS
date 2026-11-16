@@ -8,12 +8,13 @@ usage() {
 
 スクリプトと同じフォルダのXcodeプロジェクトをReleaseビルドし、
 ~/Applicationsへ配置します。アプリは起動しません。
+同じBundle IDのアプリが起動中なら、配置直前に強制終了します。
 
   --project PATH        .xcodeprojを指定
   --workspace PATH      .xcworkspaceを指定（--schemeも指定してください）
-  --scheme NAME         スキームを指定（既定: SimpleTTS）
+  --scheme NAME         スキームを指定（候補が1つなら自動選択）
   --app-target NAME     配置するアプリのターゲット（複数ある場合）
-  --configuration NAME ビルド構成（既定: Release）
+  --configuration NAME  ビルド構成（既定: Release）
   --destination DIR     配置先フォルダ（既定: ~/Applications）
   --project-signing     Xcodeプロジェクトの署名設定を使用
   --app PATH            ビルド済みの.appを配置（ビルドを省略）
@@ -29,8 +30,9 @@ plist() { /usr/libexec/PlistBuddy -c "Print $2" "$1" 2>/dev/null; }
 absolute_dir() { (cd -- "$1" && pwd -P); }
 need_value() { [[ $# -ge 2 && -n "$2" ]] || fail "$1 に値が必要です。"; }
 
-# Scheme used when --scheme is omitted.
-default_scheme="SimpleTTS"
+# Scheme used when --scheme is omitted. Leave empty to pick the only scheme
+# automatically; set it to the macOS app's scheme when the project has several.
+default_scheme=""
 
 script_dir="$(absolute_dir "$(dirname -- "$0")")"
 container=""; container_type=""; scheme=""; app_target=""
@@ -107,15 +109,17 @@ if [[ -z "$source_app" ]]; then
     done
     if [[ ${#schemes[@]} -ne 1 ]]; then
       printf 'スキーム候補: %s\n' "${schemes[*]:-（なし）}" >&2
-      fail '--schemeでビルドするスキームを指定してください。'
+      fail '--schemeでmacOSアプリのスキームを指定してください（install.shのdefault_schemeにも設定できます）。'
     fi
     scheme="${schemes[0]}"
   fi
   xcode_args+=(-scheme "$scheme" -configuration "$configuration"
     -destination 'generic/platform=macOS' -derivedDataPath "$build_root")
   if [[ "$project_signing" == false ]]; then
+    # Hardened Runtime's library validation rejects embedded frameworks without a Team ID.
     xcode_args+=(CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
-      PROVISIONING_PROFILE_SPECIFIER= CODE_SIGNING_ALLOWED=YES)
+      PROVISIONING_PROFILE_SPECIFIER= CODE_SIGNING_ALLOWED=YES
+      ENABLE_HARDENED_RUNTIME=NO)
   fi
   # Only build-setting assignments are accepted; keep the platform and output path fixed.
   # macOS ships Bash 3.2, where expanding an empty array under nounset fails.
@@ -175,15 +179,37 @@ check_destination() {
     existing_id="$(plist "$installed_app/Contents/Info.plist" :CFBundleIdentifier || true)"
     [[ "$existing_id" == "$bundle_id" ]] || fail "同名の別アプリが存在します: $installed_app"
   fi
-  # Query NSWorkspace without launching or terminating any application.
-  running="$(/usr/bin/osascript -l JavaScript - "$bundle_id" <<'JXA'
+}
+
+terminate_running_apps() {
+  local result
+  # Match the bundle ID rather than the executable name, including all instances.
+  if ! result="$(/usr/bin/osascript -l JavaScript - "$bundle_id" <<'JXA'
 ObjC.import('AppKit');
 function run(argv) {
-  return $.NSRunningApplication.runningApplicationsWithBundleIdentifier(argv[0]).count > 0 ? 'yes' : 'no';
+  var apps = $.NSRunningApplication.runningApplicationsWithBundleIdentifier(argv[0]);
+  if (Number(apps.count) === 0) return 'not-running';
+  for (var i = 0; i < apps.count; i++) {
+    var app = apps.objectAtIndex(i);
+    if (!app.terminated) app.forceTerminate;
+  }
+  // Termination is asynchronous; AppKit needs the run loop to refresh its state.
+  var deadline = $.NSDate.dateWithTimeIntervalSinceNow(5);
+  while ($.NSRunningApplication.runningApplicationsWithBundleIdentifier(argv[0]).count > 0) {
+    if (deadline.timeIntervalSinceNow <= 0) {
+      throw new Error('アプリの強制終了がタイムアウトしました: ' + argv[0]);
+    }
+    $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.1));
+  }
+  return 'terminated';
 }
 JXA
-)"
-  [[ "$running" == no ]] || fail '同じBundle IDのアプリが起動中です。終了してから再実行してください。'
+)"; then
+    fail "アプリを強制終了できませんでした: $bundle_id"
+  fi
+  if [[ "$result" == terminated ]]; then
+    printf '起動中のアプリを強制終了しました: %s\n' "$bundle_id"
+  fi
 }
 check_destination
 stage="$(mktemp -d "$destination/.install-app.XXXXXX")"
@@ -191,6 +217,7 @@ mkdir -- "$stage/new"
 /usr/bin/ditto "$source_app" "$stage/new/$(basename -- "$source_app")"
 validate_app "$stage/new/$(basename -- "$source_app")"
 check_destination
+terminate_running_apps
 if [[ -e "$installed_app" ]]; then
   mv -- "$installed_app" "$stage/previous.app"
 fi
