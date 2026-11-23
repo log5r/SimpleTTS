@@ -85,7 +85,7 @@ struct ReaderModelPrivacyTests {
         try await unattachedNotesAreListedAndDeletable()
         try await legacySavesKeepPositionAndNotes()
         try await searchFindsAndJumpsToSentences()
-        print("PASS: private reading, opt-in transitions, session restore, complete erasure, lifecycle callbacks, audio cleanup races, window reopening, sentence notes, and sentence search")
+        print("PASS: private reading, opt-in transitions, session restore, complete erasure, lifecycle callbacks, audio cleanup races, window reopening, sentence notes, sentence search, and notes list search")
     }
 
     private static func require(_ condition: @autoclosure () throws -> Bool, _ message: String) throws {
@@ -541,6 +541,17 @@ struct ReaderModelPrivacyTests {
         model.beginSearch()
         model.beginSearch()
         try require(model.searchFocusRequest == 2, "Repeated Find commands were ignored")
+
+        // While the notes list is open, Find focuses the list's search field instead of the sidebar.
+        model.isNotesListPresented = true
+        try require(model.canBeginSearch, "Find was unavailable in the notes list")
+        model.beginSearch()
+        try require(model.notesSearchFocusRequest == 1 && model.searchFocusRequest == 2,
+                     "Find in the notes list focused the sidebar search")
+        model.isNotesListPresented = false
+        model.beginSearch()
+        try require(model.notesSearchFocusRequest == 1 && model.searchFocusRequest == 3,
+                     "Find after closing the notes list did not focus the sidebar search")
         try await waitForSearch(model)
         try require(model.searchResults.map(\.sentenceIndex) == [0, 1], "Opening a document did not re-run the search")
         model.searchQuery = "  次の  "

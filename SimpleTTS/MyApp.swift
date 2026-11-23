@@ -182,7 +182,8 @@ struct PlaybackCommands: Commands {
                     model?.beginSearch()
                 }
                 .keyboardShortcut("f", modifiers: [.command])
-                .disabled(model?.canSearch != true || model?.isPresentingNotes == true)
+                // メモ一覧の表示中は一覧の検索欄に入力する（`ReaderModel.beginSearch`）
+                .disabled(model?.canBeginSearch != true)
             }
         }
 

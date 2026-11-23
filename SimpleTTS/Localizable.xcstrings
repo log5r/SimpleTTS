@@ -118,6 +118,16 @@
         }
       }
     },
+    "%lld of %lld notes": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%2$lld件中%1$lld件のメモ"
+          }
+        }
+      }
+    },
     "%lld rows need a destination or must be skipped": {
       "localizations": {
         "ja": {
@@ -1766,6 +1776,16 @@
         }
       }
     },
+    "Search Notes": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモを検索"
+          }
+        }
+      }
+    },
     "Search Sentences": {
       "localizations": {
         "ja": {
@@ -1862,6 +1882,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "この文書のメモ一覧を表示（%lld件、⇧⌘L）"
+          }
+        }
+      }
+    },
+    "Show notes whose sentence or note contains the text, or enter a sentence number": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文かメモにこの語を含むメモを表示します。文番号でも検索できます"
           }
         }
       }

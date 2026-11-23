@@ -83,6 +83,23 @@ nonisolated struct NoteListEntry: Identifiable, Hashable, Sendable {
             .sorted { $0.element.updatedAt > $1.element.updatedAt }
             .map { NoteListEntry(id: .unattached($0.offset), note: $0.element) }
     }
+
+    /// メモ一覧の検索欄に入力した語に一致するか。
+    /// 文・メモの本文の部分一致に加え、文番号の完全一致（「12」で 12 番目の文）でも一致とする。
+    /// 本文の照合は文の検索（`SentenceSearch`）と同じ基準で、大文字と小文字、全角と半角を区別せず、濁点・半濁点は区別する。
+    /// 検索語が空（空白だけを含む）なら、すべてのメモが一致する。
+    func matches(_ query: String) -> Bool {
+        guard let query = SentenceSearch.normalizedQuery(query) else { return true }
+        return (sentenceIndex != nil && sentenceNumberText.compare(query, options: SentenceSearch.options) == .orderedSame)
+            || sentence.range(of: query, options: SentenceSearch.options) != nil
+            || text.range(of: query, options: SentenceSearch.options) != nil
+    }
+
+    /// 検索語に一致するメモだけを、元の順のまま返す。
+    static func filtered(_ entries: [NoteListEntry], by query: String) -> [NoteListEntry] {
+        guard SentenceSearch.normalizedQuery(query) != nil else { return entries }
+        return entries.filter { $0.matches(query) }
+    }
 }
 
 /// メモ一覧を表計算ソフトなどで開ける形式に書き出す。

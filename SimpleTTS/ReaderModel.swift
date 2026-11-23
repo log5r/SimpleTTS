@@ -100,6 +100,8 @@ final class ReaderModel {
     @ObservationIgnored private var noteDraft: (request: NoteEditorRequest, text: String)?
     /// メモ一覧を表示しているか
     var isNotesListPresented = false
+    /// メモ一覧の表示中に「検索」コマンド（⌘F）を選ぶたびに増やし、一覧の検索欄に入力できる状態にする。
+    private(set) var notesSearchFocusRequest = 0
     /// 開いている文書のメモを読み込めたか。読み込めず退避もできなかった場合は、上書きしないよう編集を止める。
     private var notesAreWritable = false
     /// 本文が変わって付け先の文が見つからなくなったメモ。読み上げ画面には出さず、一覧と書き出しにだけ含める。
@@ -721,10 +723,22 @@ final class ReaderModel {
 
     // MARK: - Search
 
+    /// 「検索」コマンド（⌘F）を使えるか。メモ一覧の表示中は一覧の検索に使う。
+    /// メモの編集画面の表示中は、編集画面の入力を優先して使えなくする。
+    var canBeginSearch: Bool {
+        if isNotesListPresented { return noteEditorRequest == nil }
+        return canSearch && !isPresentingNotes
+    }
+
     /// 検索欄に入力できる状態にする（「検索」メニュー、⌘F）。
+    /// メモ一覧の表示中は、サイドバーの文の検索ではなく、一覧の検索欄に入力できる状態にする。
     func beginSearch() {
-        guard canSearch else { return }
-        searchFocusRequest &+= 1
+        guard canBeginSearch else { return }
+        if isNotesListPresented {
+            notesSearchFocusRequest &+= 1
+        } else {
+            searchFocusRequest &+= 1
+        }
     }
 
     /// 検索結果の文へ移動する。読み上げ中ならその文から読み直す。

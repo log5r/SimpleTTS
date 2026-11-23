@@ -82,8 +82,6 @@ private struct SearchResultRow: View {
     private static let leadingContext = 20
     /// 一致した箇所がこの文字数より後ろにあるときだけ、文の先頭を省略する
     private static let maxLeadingCharacters = 40
-    /// 一致した箇所の背景色
-    private static let matchHighlight = Color.yellow.opacity(0.35)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -114,14 +112,26 @@ private struct SearchResultRow: View {
             isTruncated = true
         }
 
-        var attributed = AttributedString(excerpt)
-        for range in SentenceSearch.matchRanges(of: query, in: excerpt) {
+        let attributed = SearchHighlight.highlighting(query, in: excerpt)
+        return isTruncated ? AttributedString("…") + attributed : attributed
+    }
+}
+
+/// 検索語に一致した箇所の強調表示（サイドバーの検索結果とメモ一覧で共通）
+enum SearchHighlight {
+    /// 一致した箇所の背景色
+    static let color = Color.yellow.opacity(0.35)
+
+    /// 検索語に一致した箇所を強調した文字列。検索語が空なら、そのままの文字列を返す。
+    static func highlighting(_ query: String, in text: String) -> AttributedString {
+        var attributed = AttributedString(text)
+        for range in SentenceSearch.matchRanges(of: query, in: text) {
             if let attributedRange = Range(range, in: attributed) {
                 // 和文は太字だけでは目立たないため、検索の強調表示と同じく黄色の背景も付ける
                 attributed[attributedRange].inlinePresentationIntent = .stronglyEmphasized
-                attributed[attributedRange].backgroundColor = Self.matchHighlight
+                attributed[attributedRange].backgroundColor = color
             }
         }
-        return isTruncated ? AttributedString("…") + attributed : attributed
+        return attributed
     }
 }
