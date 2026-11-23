@@ -206,6 +206,8 @@ private struct NoteDeletionDialog: ViewModifier {
 
 /// 開いている文書のメモ一覧。メモを付けた文・メモ・最終更新日を表で表示し、CSV／TSV に書き出せる。
 /// 本文が変わって付け先の文が見つからなくなったメモも、文番号なしで末尾に表示する（読み上げ画面には出ない）。
+/// 検索欄に入力すると、文・メモに検索語を含むもの（または文番号が一致するもの）だけに絞り込む。
+/// 書き出しは絞り込みにかかわらず、すべてのメモを対象にする。
 struct NotesListView: View {
     let model: ReaderModel
     @Environment(\.dismiss) private var dismiss
@@ -221,11 +223,23 @@ struct NotesListView: View {
     @State private var isImportPickerPresented = false
     @State private var isReadingImport = false
     @State private var importPlan: NoteImportPlan?
+    /// 検索欄に入力した語。一覧を開くたびに空にする。
+    @State private var query = ""
+    #if os(iOS)
+    @FocusState private var isSearchFieldFocused: Bool
+    #endif
 
     private var entries: [NoteListEntry] { model.noteListEntries }
 
+    /// 検索語で絞り込んだメモ
+    private var filteredEntries: [NoteListEntry] {
+        NoteListEntry.filtered(entries, by: query)
+    }
+
+    private var isFiltering: Bool { SentenceSearch.normalizedQuery(query) != nil }
+
     private var sortedEntries: [NoteListEntry] {
-        entries.sorted(using: sortOrder)
+        filteredEntries.sorted(using: sortOrder)
     }
 
     var body: some View {
@@ -241,13 +255,22 @@ struct NotesListView: View {
                         .truncationMode(.middle)
                 }
                 Spacer()
+                NotesSearchField(
+                    text: $query,
+                    prompt: String(localized: "Search Notes"),
+                    focusRequest: model.notesSearchFocusRequest,
+                    onMoveDown: moveFromSearchFieldToList
+                )
+                .frame(minWidth: 160, idealWidth: 220, maxWidth: 240)
+                .disabled(entries.isEmpty)
+                .help("Show notes whose sentence or note contains the text, or enter a sentence number")
             }
             .padding([.horizontal, .top], 16)
             .padding(.bottom, 10)
             content
             Divider()
             HStack {
-                Text("\(entries.count) notes")
+                noteCount
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                 Spacer()
@@ -263,9 +286,18 @@ struct NotesListView: View {
         .frame(minWidth: 700, idealWidth: 700, minHeight: 360, idealHeight: 480)
         .modifier(listPresentations)
         .modifier(importPresentations)
+        .onChange(of: query) { pruneSelection() }
         #else
         NavigationStack {
             content
+                .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: Text("Search Notes"))
+                .searchFocused($isSearchFieldFocused)
+                .onChange(of: model.notesSearchFocusRequest) {
+                    // 一覧から開いた編集画面などの表示中は、下の一覧の検索欄に移らない
+                    guard editing == nil, importPlan == nil else { return }
+                    isSearchFieldFocused = true
+                }
+                .onChange(of: query) { pruneSelection() }
                 .navigationTitle("Notes")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -296,6 +328,9 @@ struct NotesListView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if filteredEntries.isEmpty {
+            ContentUnavailableView.search(text: SentenceSearch.normalizedQuery(query) ?? "")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             #if os(iOS)
             if horizontalSizeClass == .compact {
@@ -324,14 +359,14 @@ struct NotesListView: View {
             }
             .width(min: 32, ideal: 40, max: 64)
             TableColumn("Sentence", value: \.sentence) { entry in
-                Text(entry.sentence)
+                Text(SearchHighlight.highlighting(query, in: entry.sentence))
                     .lineLimit(3)
                     .foregroundStyle(entry.sentenceIndex == nil ? .secondary : .primary)
                     .help(entry.sentenceIndex == nil ? Text(Self.unattachedHelp) : Text(entry.sentence))
             }
             .width(min: 120, ideal: 200)
             TableColumn("Note", value: \.text) { entry in
-                Text(entry.text)
+                Text(SearchHighlight.highlighting(query, in: entry.text))
                     .lineLimit(3)
                     .help(entry.text)
             }
@@ -354,6 +389,34 @@ struct NotesListView: View {
             }
         }
     }
+
+    /// メモの件数。絞り込み中は、全体のうち何件を表示しているかを示す。
+    @ViewBuilder
+    private var noteCount: some View {
+        if isFiltering {
+            Text("\(filteredEntries.count) of \(entries.count) notes")
+        } else {
+            Text("\(entries.count) notes")
+        }
+    }
+
+    /// 絞り込みで見えなくなった行を選択から外す（見えない行に操作が及ばないようにする）
+    private func pruneSelection() {
+        let visible = Set(filteredEntries.map(\.id))
+        selection.formIntersection(visible)
+    }
+
+    #if os(macOS)
+    /// 検索欄で ↓ を押したとき、一覧の先頭の行を選ぶ（一覧へのフォーカスの移動は検索欄が行う）。
+    /// 選べる行がなければ false を返し、検索欄に留まる。
+    private func moveFromSearchFieldToList() -> Bool {
+        guard let first = sortedEntries.first else { return false }
+        if selection.isEmpty || selection.isDisjoint(with: sortedEntries.map(\.id)) {
+            selection = [first.id]
+        }
+        return true
+    }
+    #endif
 
     private static let unattachedHelp: LocalizedStringKey = "This sentence is no longer in the file. The note is kept so you can review, export, or delete it."
 
@@ -383,11 +446,11 @@ struct NotesListView: View {
                             .font(.caption)
                     }
                     .foregroundStyle(.secondary)
-                    Text(entry.sentence)
+                    Text(SearchHighlight.highlighting(query, in: entry.sentence))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
-                    Text(entry.text)
+                    Text(SearchHighlight.highlighting(query, in: entry.text))
                         .lineLimit(4)
                 }
                 .foregroundStyle(.primary)
@@ -498,6 +561,103 @@ struct NotesListView: View {
         #endif
     }
 }
+
+#if os(macOS)
+/// メモ一覧の検索欄（AppKit の標準の検索欄 `NSSearchField`）。
+/// SwiftUI の `.searchable` はツールバーのないシートには表示されないため、AppKit の部品を使う。
+/// 入力のたびに絞り込み、Esc で入力を消せる。↓ で一覧に移る。
+private struct NotesSearchField: NSViewRepresentable {
+    @Binding var text: String
+    let prompt: String
+    /// 値が変わるたびに検索欄にフォーカスする（「検索」コマンド、⌘F）
+    let focusRequest: Int
+    /// ↓ を押したときに呼ぶ。true を返したら一覧にフォーカスを移す。
+    let onMoveDown: () -> Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text, focusRequest: focusRequest, onMoveDown: onMoveDown)
+    }
+
+    func makeNSView(context: Context) -> NSSearchField {
+        let field = NSSearchField()
+        field.placeholderString = prompt
+        field.delegate = context.coordinator
+        // 入力を止めるのを待たずに、1 文字ごとに絞り込む
+        field.sendsSearchStringImmediately = true
+        field.sendsWholeSearchString = false
+        field.target = context.coordinator
+        field.action = #selector(Coordinator.searchFieldChanged(_:))
+        field.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        field.stringValue = text
+        return field
+    }
+
+    func updateNSView(_ field: NSSearchField, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.text = $text
+        coordinator.onMoveDown = onMoveDown
+        if field.stringValue != text {
+            field.stringValue = text
+        }
+        field.placeholderString = prompt
+        if coordinator.focusRequest != focusRequest {
+            coordinator.focusRequest = focusRequest
+            // メニューの処理が終わってからフォーカスを移す
+            DispatchQueue.main.async {
+                // 一覧から開いた編集画面などの表示中は、下の一覧の検索欄に移らない
+                guard let window = field.window, window.attachedSheet == nil, field.isEnabled else { return }
+                window.makeFirstResponder(field)
+            }
+        }
+    }
+
+    final class Coordinator: NSObject, NSSearchFieldDelegate {
+        var text: Binding<String>
+        var focusRequest: Int
+        var onMoveDown: () -> Bool
+
+        init(text: Binding<String>, focusRequest: Int, onMoveDown: @escaping () -> Bool) {
+            self.text = text
+            self.focusRequest = focusRequest
+            self.onMoveDown = onMoveDown
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSSearchField else { return }
+            update(from: field)
+        }
+
+        /// 消去ボタンや Esc で入力を消したとき
+        @objc func searchFieldChanged(_ sender: NSSearchField) {
+            update(from: sender)
+        }
+
+        private func update(from field: NSSearchField) {
+            if text.wrappedValue != field.stringValue {
+                text.wrappedValue = field.stringValue
+            }
+        }
+
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            guard commandSelector == #selector(NSResponder.moveDown(_:)),
+                  let window = control.window,
+                  let table = Self.firstTableView(in: window.contentView),
+                  onMoveDown() else { return false }
+            window.makeFirstResponder(table)
+            return true
+        }
+
+        private static func firstTableView(in view: NSView?) -> NSTableView? {
+            guard let view else { return nil }
+            if let table = view as? NSTableView { return table }
+            for subview in view.subviews {
+                if let table = firstTableView(in: subview) { return table }
+            }
+            return nil
+        }
+    }
+}
+#endif
 
 private struct NotesImportPresentations: ViewModifier {
     @Binding var isPickerPresented: Bool

@@ -16,9 +16,10 @@ struct StorageAndImportTests {
         try testNotesStorage(in: root)
         try testNotesAttachment()
         try testNotesExport()
+        try testNotesFilter()
         try testNotesImport(in: root)
         try testNotesImportMatching()
-        print("PASS: local text validation, size limits, encodings, storage recovery, backup exclusion, complete erasure, notes storage, and notes export")
+        print("PASS: local text validation, size limits, encodings, storage recovery, backup exclusion, complete erasure, notes storage, notes export, and notes filtering")
     }
 
     private static func require(_ condition: @autoclosure () throws -> Bool, _ message: String) throws {
@@ -216,6 +217,32 @@ struct StorageAndImportTests {
         try require(entries.map(\.text) == ["そのまま", "付け直し", "残す", "古い"], "Unattached notes should be newest first")
         try require(Set(entries.map(\.id)).count == entries.count, "List entry IDs must be unique")
         try require(entries[2].sortNumber > entries[1].sortNumber, "Unattached notes should sort last")
+    }
+
+    private static func testNotesFilter() throws {
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let entries = NoteListEntry.entries(attached: [
+            SentenceNote(sentenceIndex: 0, sentence: "Apple pie.", text: "おいしい", updatedAt: date),
+            SentenceNote(sentenceIndex: 1, sentence: "はしる。", text: "line 1\nＡＰＰＬＥ", updatedAt: date),
+            SentenceNote(sentenceIndex: 11, sentence: "ばしょ。", text: "メモ", updatedAt: date),
+        ], unattached: [
+            SentenceNote(sentenceIndex: 1, sentence: "消えた文。", text: "残す", updatedAt: date),
+        ])
+        func numbers(_ query: String) -> [Int?] { NoteListEntry.filtered(entries, by: query).map(\.sentenceIndex) }
+
+        try require(numbers("") == [0, 1, 11, nil], "An empty query must keep every note in order")
+        try require(numbers("  \n") == [0, 1, 11, nil], "A blank query must keep every note")
+        // 文とメモの両方を、大文字・小文字と全角・半角を区別せずに探す
+        try require(numbers("apple") == [0, 1], "Case- and width-insensitive match in sentences and notes failed")
+        try require(numbers(" おいし ") == [0], "Query should be trimmed and match note text")
+        // 濁点は区別する（「は」で「ば」は一致しない）
+        try require(numbers("は") == [1], "Voiced marks must be distinguished")
+        // 文番号は完全一致。付け先の見つからないメモ（元の文番号 2）は文番号で一致しない
+        try require(numbers("12") == [11], "Sentence number should match exactly")
+        try require(numbers("１２") == [11], "Full-width sentence numbers should match")
+        try require(numbers("2") == [1], "Unattached notes must not match by their old sentence number")
+        try require(numbers("消えた") == [nil], "Unattached notes should match by sentence text")
+        try require(numbers("not found").isEmpty, "Unmatched queries must return no notes")
     }
 
     private static func testNotesExport() throws {
